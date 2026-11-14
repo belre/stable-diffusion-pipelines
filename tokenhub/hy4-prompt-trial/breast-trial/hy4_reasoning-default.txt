@@ -1,0 +1,700 @@
+Need craft response to user with code approaches. Must be English only. Must not generate images. Need keep concise but include all requested details. Need think through details. Need maybe mention image filenames and visual goal. Need propose 3-4 distinct approaches. For each: short description, libraries, minimal runnable Python skeleton under 60 lines, adjustable parameters (strength, mask feather, denoise), expected risks (line-art distortion, color seams, changes to face), VRAM cost. Need code only edits existing images. We can include code that loads existing SAJ6O4sj.png, uses masks maybe manually supplied or auto. No image generation itself? Need careful: "Do not generate images yourself. Only write code that edits existing images." This likely means don't output images in response, and code should be for editing existing images, not generating from scratch. But inpainting through ComfyUI API is essentially generating patches. They explicitly requested "mask-based inpainting through ComfyUI API with low denoise" and "automatic mask creation from pink tank top by color or segmentation, then inpainting" as examples. So code can call ComfyUI API to inpaint existing image. Need avoid generating images in reply (no image outputs). Code can edit existing image by saving result. Need maybe not include base64 or actual outputs.
+
+Need mention reference target proportions: nearly flat/small chest, tank top hanging loosely from shoulders. Target currently large chest and cloth clings with tension wrinkles from underbust. Need state what needs to change visually: reduce chest projection/contour, reshape side seams/neckline/armholes to hang loose from shoulders, remove/replace underbust tension folds with vertical/diagonal drape folds, maybe flatten lower hem and belt area slightly. Need 2-3 sentences. Need maybe mention keep face, hair, arms, background unchanged. Good.
+
+Need propose 3 to 4 distinct approaches. Need include for each short desc, libraries needed, minimal runnable Python skeleton under 60 lines, adjustable params, risks, VRAM cost. Need maybe 4 approaches:
+A. Local geometric warp (mesh / radial basis / thin-plate?) plus soft mask + seam blending. Use OpenCV, numpy, Pillow maybe scipy. Need code under 60 lines. Need implement local horizontal squeeze/vertical lift around chest? Need avoid affecting face. Need mask elliptical/rect polygon. Need define a warp field. Need maybe use cv2.remap with feathered mask. Need parameter strength, feather, center, radius. Need code that reads image, mask polygon maybe manual bbox coordinates; warp chest region inward/upward and remove tension wrinkles? It can't remove wrinkles, only compress geometry. Need combine original and warped using feathered mask. Need maybe use cv2.detailEnhance? No. Need code under 60 lines. Need no generated images output in response, just code saving file. Need include cv2.imread, cv2.remap, GaussianBlur mask, etc. Need define bbox relative coordinates? Need user can set BBOX = (x0,y0,x1,y1) in pixels. Need maybe code auto resolution: W,H = img.shape; BBOX = tuple(int(v*W/H?) no, easier: BBOX = (300, 430, 520, 760) maybe target image dimensions unknown; image shown maybe 768x1280? Actually displayed target maybe 768x1280? Need avoid hardcoded absolute coordinates? Could use normalized polygon and scale to image; better: POLY = np.array([[.36,.29],[.64,.29],[.66,.57],[.34,.57]], np.float32) * [W,H]? Need syntax carefully. Could use normalized points with list comprehension. Need maybe mask from polygon, feather. Need warp: for each pixel within bbox, displacement dx = -strength * (x - cx)/rx * falloff? Need reduce chest width? Need flatten chest: side contours inward, underbust area upward? Actually chest too large and tank top clings; need reduce volume visually by narrowing bust silhouette and making fabric straighter. Warp field: dx = -strength * sign(x-cx) * (1 - abs(x-cx)/rx) * falloff? That pulls side contours inward toward center. But also need maybe compress vertical projection: dy = -strength_y * falloff centered at lower chest? Need maybe push underbust upward? Hmm.
+
+Maybe implement "inverse mapping" with cv2.remap: For each output pixel (x,y), source coordinate = (x + dx, y + dy) where dx pushes source from outside inward? Need need understand remap: dst(x,y)=src(map_x(x,y), map_y(x,y)). If we want output chest narrower, for each dst x near side, sample from source x further outward? Wait if output wants at x=0.4W to show content that was originally at x=0.38W (side moved inward), map_x = x - dx? Need derive. Simpler: use local scaling around center: map_x = cx + (x - cx) * (1 + strength*falloff), map_y = y + dy? If scale >1, output samples wider source area, causing content to appear compressed horizontally (because source range wider mapped into same output range). Actually mapping dst x to src x = cx + (x-cx)*s with s>1: output at x=cx+delta shows source at cx+s*delta, so features originally at x=cx+s*delta appear at x=cx+delta, i.e., pulled inward toward center. Good: horizontal compression of region. So map_x = cx + (x-cx)*(1+strength*falloff). Need falloff elliptical. Similarly map_y maybe cy + (y-cy)*(1 - lift*falloff)? Need vertical maybe stretch? To make top hang loosely from shoulders, could slightly stretch vertical below neckline and flatten underbust by moving lower chest downward? Need keep simple: use sx=1+strength horizontally; sy=1 - 0.25*strength vertically? If sy<1, output samples smaller vertical source range -> vertical stretch (features move down?) Need maybe avoid complex. Need include in code with strength parameter controlling horizontal squeeze and slight vertical stretch. Need maybe use cv2.remap with map restricted by mask; then blend warped with original using feathered mask. Need avoid line distortion. Need include maybe use cv2.INTER_LANCZOS4. Need code under 60 lines. Need maybe include manual polygon mask; can also load external mask if exists. Need include "mask feather" param. Need maybe use cv2.GaussianBlur. Need maybe include "mask = cv2.fillPoly". Need maybe "soft = cv2.GaussianBlur(mask, (0,0), feather).astype(np.float32)/255". Need "out = (warp*soft[...,None] + img*(1-soft[...,None])).astype(np.uint8)". Need save. Good.
+
+Potential issue: remap map_x map_y should only apply inside mask? We can create global maps initialized to x,y; inside bounding rect set maps. Need use full-size maps with np.meshgrid. Need maybe compute falloff on full image: falloff = exp(-((x-cx)^2/rx^2 + (y-cy)^2/ry^2)*2). Need use only where soft>0? Could apply to whole image but blend only mask. Need need map_x = x + (x-cx)*strength*falloff; map_y = y - lift*falloff? Actually if we use map_y = cy + (y-cy)*(1 - 0.15*strength*falloff), sy<1 -> vertical stretching. But maybe better: map_y = y + lift*falloff (sample lower source for upper output? Need not overthink). Need maybe include "dy = -vertical_lift * falloff" to pull underbust folds upward? Hmm. Let's define parameter `strength=0.18`, `vertical_drop=8` pixels; `map_x = cx + (x-cx)*(1+strength*falloff)`; `map_y = y - vertical_drop*falloff*(1-abs(x-cx)/rx)`? Need maybe not too complex. Need code simply warp. Need mention hand-retouch likely needed for fold lines. Fine.
+
+Need maybe approach B: ComfyUI API inpainting with low denoise. Need include minimal runnable Python skeleton under 60 lines. Need libraries `requests`, `PIL`, `numpy`, maybe `websocket-client`? Need ComfyUI API: POST /upload/image with image and mask, POST /prompt with workflow JSON, poll /history/{prompt_id}, download output. Need need self-contained skeleton. Need complexity: full workflow JSON is long; need keep under 60 lines. Could use a pre-existing workflow file `inpaint_workflow.json` (API format) and inject image/mask/denoise/seed. Need code that loads target, maybe load existing `chest_mask.png` (hand-drawn mask). Need upload image and mask via `/upload/image`. Need modify workflow nodes by name? Need need know ComfyUI API format. Need maybe use node titles? Need minimal: `wf = json.load(open("inpaint_api.json"))`; set `wf["<load_image_node_id>"]["inputs"]["image"] = uploaded_name`; set mask node; set KSampler denoise. Need node IDs unknown; could search by `class_type`: `LoadImage`, `LoadImageMask`? Actually ComfyUI has `LoadImage` for image; mask can be loaded via `LoadImage` with `image` and output mask? In ComfyUI, `LoadImage` outputs IMAGE and MASK? I think `LoadImage` returns IMAGE and MASK from alpha channel maybe yes. In API workflows, `LoadImage` has outputs IMAGE and MASK; for inpainting use `VAEEncodeForInpaint` with `mask` input from `LoadImage` MASK maybe. But for uploaded mask as separate grayscale image, need node `LoadImageMask`? ComfyUI has `LoadImageMask` node in newer versions: inputs `image`, `channel` (alpha/red/green/blue), outputs MASK. Need unsure. Could write generic function `set_first_input(wf, class_type, key, value)` that finds first node with class_type. Need for `LoadImage` set image; for `LoadImageMask` set image; for `KSampler` set denoise. Need also set `VAEEncodeForInpaint`? Need inpaint workflow likely uses `VAEEncodeForInpaint` or `InpaintModelConditioning`. Need need include `grow_mask_by` maybe not. Need maybe use `SetLatentNoiseMask`? Hmm.
+
+Need code skeleton not necessarily fully runnable without workflow? User asks minimal runnable Python skeleton. Need make it runnable assuming a workflow JSON exists. Need maybe include a tiny workflow builder? But under 60 lines maybe possible? Need need know ComfyUI API nodes. Let's recall ComfyUI API workflow format:
+
+```
+{
+  "3": {"class_type": "KSampler", "inputs": {"seed": 123, "steps": 20, "cfg": 7, "sampler_name": "euler", "scheduler": "normal", "denoise": 0.35, "model": ["4",0], "positive": ["6",0], "negative": ["7",0], "latent_image": ["5",0]}},
+  "4": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "anime.safetensors"}},
+  "5": {"class_type": "VAEEncodeForInpaint", "inputs": {"pixels": ["8",0], "vae": ["4",2], "mask": ["9",0], "grow_mask_by": 6}},
+  "6": {"class_type": "CLIPTextEncode", "inputs": {"text": "flat chest, loose pink tank top, ...", "clip": ["4",1]}},
+  "7": {"class_type": "CLIPTextEncode", "inputs": {"text": "large breasts, tight fabric, ...", "clip": ["4",1]}},
+  "8": {"class_type": "LoadImage", "inputs": {"image": "target.png"}},
+  "9": {"class_type": "LoadImageMask", "inputs": {"image": "mask.png", "channel": "red"}},
+  "10": {"class_type": "VAEDecode", "inputs": {"samples": ["3",0], "vae": ["4",2]}},
+  "11": {"class_type": "SaveImage", "inputs": {"filename_prefix": "retouch", "images": ["10",0]}}
+}
+```
+
+Need check `VAEEncodeForInpaint` inputs: `pixels`, `vae`, `mask`, `grow_mask_by`. I think yes. Need `KSampler` `denoise` for img2img/inpaint. Need `CheckpointLoaderSimple` outputs `MODEL`, `CLIP`, `VAE` at indices 0,1,2. Need `CLIPTextEncode` takes `clip`. Need `VAEDecode` takes `samples`, `vae`. Need `SaveImage` takes `images`. Need `LoadImageMask` channel values maybe "alpha" or "red". Need if mask is grayscale uploaded as RGB, red channel works. Need upload mask via `/upload/image` with `type=input`? ComfyUI endpoint: POST `/upload/image` files: `image`, data: `type=input`, `overwrite=true`, `subfolder=""`. Response JSON `{"name": "...", "subfolder": "", "type": "input"}`. Need use `name` maybe includes subfolder? For LoadImage, image input should be `filename` maybe with subfolder path. Need maybe `img_name = r.json()["name"]`; if subfolder: `f"{subfolder}/{name}"`. Need code handle.
+
+Need polling: `GET /history/{prompt_id}` returns dict with prompt_id key when done, containing `outputs` with node id -> `images` list with `filename`, `subfolder`, `type`. Need download via `/view?filename=...&subfolder=...&type=...`. Need code under 60 lines. Need maybe use `time.sleep`. Need maybe need websocket? Polling history is enough. Need maybe need `client_id`? Not necessary for prompt. Need need `requests`. Need `json`, `time`, `Path`. Need maybe no PIL needed if just upload files. Need need create mask? Approach B can use hand-drawn `chest_mask.png`; code can optionally feather mask using PIL/OpenCV? Need include mask feather parameter. Could load mask, blur with cv2 or PIL ImageFilter.GaussianBlur, save to temp, upload. Need libraries `requests`, `Pillow`, `numpy`? Need use `PIL.Image`, `ImageFilter`. Need maybe `cv2` not needed. Need use `Image.open(mask).convert("L").filter(ImageFilter.GaussianBlur(feather))`. Need save as `mask_feathered.png`. Need need maybe mask should be white over chest/tank area only; includes garment and side seams but not face/arms/belt/background. Need code skeleton under 60 lines. Need include adjustable params: strength? In inpainting, strength = denoise (0.25-0.45), mask feather, `grow_mask_by`, CFG, prompt weights, steps. Need maybe "denoise" is strength. Need expected risks: may repaint line art, change neckline/armholes, color seams, if mask too high/denoise too high may alter face/collarbone. Need VRAM cost: local 8GB likely OK at 768-1024px with SD1.5/anime checkpoint + LoRA, ~4-6 GB; Runpod if SDXL/ControlNet/high res. Need mention only patch/inpaint latent but full image encode/decode still uses VRAM. Need maybe "0 GB locally if Runpod".
+
+Need approach C: Automatic mask creation from pink tank top by color or segmentation, then inpainting. Need combine automatic mask generation + ComfyUI API maybe reuse approach B code? Need distinct approach: automatic mask from HSV color threshold + maybe grabcut / SAM? Need user asked "automatic mask creation from the pink tank top by color or segmentation, then inpainting". Need for each approach give code skeleton under 60 lines. Need maybe code that creates mask and then calls a function from approach B? Need self-contained? Need "minimal runnable Python skeleton" under 60 lines. Could write code that does HSV threshold, morphology, feather, save mask, then call ComfyUI API with a compact helper? Need maybe duplicate request code? Need need keep under 60 lines. Could write that it reuses `comfy_inpaint.py` from approach B via `subprocess.run([...])`? But then not self-contained? Need maybe code skeleton can call `run_comfy_inpaint` defined earlier? Since response includes multiple code blocks, can reference previous helper? Need "For each approach give minimal runnable Python skeleton" maybe each code block should be runnable independently? Better avoid cross-dependency? But can say "reuse the ComfyUI caller from approach B" maybe not self-contained. Need maybe approach C code can generate mask only and then invoke `subprocess` to run approach B script saved as `comfy_inpaint.py`. But need provide that script in approach B; then approach C can call it. Is that acceptable? Need maybe "minimal runnable skeleton" if user saved B as file. But better to make C self-contained by including compact ComfyUI call again? Need under 60 lines maybe possible with a helper function. Need need not include full workflow builder in every code; can load `inpaint_api.json` and use `post` helper. Need maybe approach B code includes a reusable function `comfy_inpaint(image, mask, denoise, ...)`; approach C can `from comfy_inpaint import comfy_inpaint`. But that requires saving previous file. Hmm.
+
+Need maybe propose 4 approaches where one is "automatic mask + local CV inpaint/patchmatch" not ComfyUI. Need need "then inpainting" could be OpenCV inpaint ( Telea / Navier-Stokes) or ComfyUI. Distinct from B: B uses hand-drawn mask + SD inpainting; C uses automatic color/segmentation mask + lightweight classical inpainting / content-aware fill? But user asked then inpainting through ComfyUI API maybe example. Need include 3-4 distinct approaches. Could have:
+1. Local geometric warp + manual mask (pure CV).
+2. Hand-drawn mask + ComfyUI low-denoise inpainting (SD).
+3. Auto pink-shirt mask + ComfyUI low-denoise inpainting (reuse B caller, but code generates mask and calls B script). Distinct because mask creation automatic; can also include prompt that applies only to shirt.
+4. Reference-guided warp via optical flow / image registration? Need maybe "complex design" clause: "If an approach would need complex design (full pipeline or architecture), do not design it. Write a self-contained hand-off prompt (goal, inputs, outputs, constraints, environment) for another model instead." Need maybe approach 4 could be "reference-guided non-rigid registration / ControlNet + segmentation" which is complex. Need need decide if to include as 4th approach with hand-off prompt instead of code? Need instructions: "Propose 3 to 4 distinct approaches. ... (d) any other lightweight approach you consider better." "If an approach would need complex design (full pipeline or architecture), do not design it. Write a self-contained hand-off prompt ... for another model instead." Need maybe include 4th approach as hand-off prompt (no code?) But instruction 3 says "For each approach give: ... minimal runnable Python skeleton (under 60 lines)..." Does hand-off prompt approach need code skeleton? Maybe if complex, we don't design it; instead write hand-off prompt. Need maybe approach 4 can be a simple "manual pen-tablet prep / layer-based frequency separation" with code? Need need satisfy "for each approach" maybe include code. Maybe include 3 approaches only, all with code. Then no complex approach needed? But instruction 5 says "If an approach would need complex design..., do not design it. Write a self-contained hand-off prompt ... instead." Could interpret if we propose a complex approach, don't design it. We can avoid complex approaches altogether by proposing 3 lightweight ones, and maybe mention a 4th complex option as hand-off prompt with no code? But then "for each approach give code skeleton" might conflict. Need maybe include 4 approaches: 3 lightweight code ones, plus 4th "complex reference-guided segmentation/ControlNet pose+garment retouch" as hand-off prompt instead of code, explicitly stating "No code skeleton: this is a hand-off prompt per instruction 5." But instruction 3 says for each approach give skeleton; maybe we can include a "minimal skeleton" that just writes the hand-off prompt to a file? That would be silly. Need maybe better to include only 3 approaches, all with code, and add a brief note: "I am not including a 4th complex reference-guided pipeline here; if you want it, use this hand-off prompt..." But instruction says propose 3 to 4 distinct approaches; 3 is fine. Need then instruction 5: "If an approach would need complex design ... do not design it. Write a self-contained hand-off prompt ... instead." Could include a 4th "approach" as hand-off prompt, but not design. Need maybe "Approach 4 (hand-off, not designed): Reference-guided ControlNet/IP-Adapter retouch." Then no code skeleton? Need maybe include a self-contained hand-off prompt. Need need still satisfy "for each approach give..." maybe we can include for approach 4: "Libraries: N/A (hand-off only). Code skeleton: N/A by instruction 5; instead: [prompt]. Adjustable params: to be specified by the other model. Risks: ... VRAM: ...". Need maybe include a tiny code skeleton that writes the hand-off prompt to `handoff.md`? That would be code but not editing images. Hmm. Need maybe not. Need think.
+
+Need parse user instructions carefully:
+
+"2. Propose 3 to 4 distinct approaches. For example: (a)... (b)... (c)... (d) any other lightweight approach you consider better.
+3. For each approach give: a short description, the libraries needed, a minimal runnable Python skeleton (under 60 lines), the adjustable parameters (strength, mask feather, denoise), the expected risks..., and the VRAM cost.
+4. Do not choose one approach for the user. End with a comparison table...
+5. If an approach would need complex design (full pipeline or architecture), do not design it. Write a self-contained hand-off prompt (goal, inputs, outputs, constraints, environment) for another model instead."
+
+This suggests if among the 3-4 approaches one would need complex design, then instead of designing it, write hand-off prompt. But still "for each approach" includes code skeleton etc. Maybe we can make all 3-4 approaches lightweight and self-contained, so instruction 5 is not triggered. But they explicitly mention "If an approach would need complex design..." likely expecting us to avoid designing a complex 4th and provide a hand-off prompt. Need maybe include 4 approaches where 3 code ones and 4th complex hand-off. Need need satisfy "for each approach" maybe include code skeleton for 4th? Maybe we can include a code skeleton that is just a stub that writes the prompt to a file and raises NotImplementedError? But "runnable" and "edits existing images"? Hmm. Need maybe better to include 3 lightweight approaches with code, and then a separate "Optional complex direction (not designed; hand-off prompt)" that is not counted as one of the 3-4 approaches? But instruction 5 says "If an approach would need complex design..." If we don't propose it as approach, no need. But maybe user wants a hand-off prompt for another model if complex design needed. Could include a 4th approach as "not designed" with hand-off prompt and no code, and explicitly say "Per instruction 5, no code skeleton is provided for this complex option." Need risk that evaluation checks for 3-4 approaches each with code. Hmm.
+
+Need maybe design 4 lightweight approaches, no complex. Then instruction 5 not used. But maybe need include hand-off prompt anyway? Could include a short "If you later want a complex reference-guided pipeline, use this hand-off prompt:" after comparison table? But instruction 4 says end with comparison table. Need "End with a comparison table" means final content must be table. So hand-off prompt must be before table. Need maybe include 4th approach as hand-off prompt before table, then table includes it. Need ensure final ends with table. Need maybe no text after table. Need need include code for 4th? Maybe can avoid by saying "Approach 4 is intentionally not designed (instruction 5); instead, hand-off prompt..." But then table must include approach 4 with effort/quality risk/VRAM. Need maybe table can include "Effort: high (external design); Quality risk: medium-high; VRAM: 6-10 GB / Runpod". Need need "for each approach give code skeleton" not satisfied for approach 4. Need maybe include a minimal skeleton that is not a full pipeline but a "hand-off writer" that writes the prompt to a file? Need maybe not edit images. Hmm.
+
+Alternative: Propose exactly 3 approaches, all lightweight, each with code. Then after 3 approaches, include "Complex alternative not included as an approach: hand-off prompt" maybe not counted, but still self-contained hand-off prompt. Need then table with 3 rows (approaches) and maybe a note? Need end with table. Need instruction 5 triggered? "If an approach would need complex design..." We can say "A reference-guided ControlNet/IP-Adapter pipeline would need complex design, so I am not proposing it as an approach; here is a hand-off prompt instead." That seems to satisfy. Need then table includes 3 approaches. Need maybe "End with comparison table (approach, effort, quality risk, VRAM)" includes 3 rows. Need need not choose one. Good. Need maybe include hand-off prompt before table. Need need keep concise. Need need code skeletons under 60 lines each. Need need make sure code blocks are under 60 lines. Need count lines. Need need include libraries, adjustable params, risks, VRAM for each. Need need maybe include strengths, mask feather, denoise for each. For pure warp, denoise N/A; for classical inpaint, denoise N/A. Need maybe include "denoise: not used (set to 0 / N/A)" but user asked adjustable parameters (strength, mask feather, denoise). Need include all three fields for each approach; if not applicable, say N/A. Need maybe include `strength` for warp, `feather`, `denoise: N/A (no diffusion)`. For ComfyUI, `strength=denoise`, `mask feather`, `denoise`. Need maybe include `grow_mask_by`. For auto mask, `strength=threshold/morphology`, `feather`, `denoise`. Need maybe include "strength" as HSV threshold tolerance or warp strength. Need need not overspec.
+
+Need think about approach 3 code. Need maybe combine auto mask + "classical OpenCV inpainting" instead of ComfyUI, to be distinct from B. But user explicitly example (c) "automatic mask creation from the pink tank top by color or segmentation, then inpainting". Could be classical inpainting. Need maybe "color mask + OpenCV Navier-Stokes/Telea + Poisson/clone blending"? Need need code to edit existing image. Need maybe use `cv2.inpaint` on mask with radius 3-7; but classical inpaint can't understand fabric folds, will smear; not great but lightweight. Could be approach C: auto mask + ComfyUI low-denoise (same as B but mask auto). Need distinct enough? B manual mask; C auto mask. Need maybe code can generate mask and call ComfyUI API. Need need avoid duplicating API code by importing from B? Need maybe approach C code can call `subprocess.run([sys.executable, "comfy_inpaint.py", ...])` after saving B as script. Need need make B script accept CLI args. Then C is runnable if B saved. Need include that in B code: `if __name__ == "__main__":` with `argparse` maybe. Need code under 60 lines. Need need make B code include CLI and function. Then C code can call it. Need need maybe C code also auto mask generation with HSV and morphology, then call B script. Need need maybe C code under 60 lines. Need need libraries: `opencv-python`, `numpy`, `subprocess` (stdlib), plus B's `requests`, `Pillow`. Need need minimal runnable skeleton. Need maybe C code:
+
+```
+# auto_mask_inpaint.py  (uses comfy_inpaint.py from approach B)
+import cv2, numpy as np, subprocess, sys
+IMG="SAJ6O4sj.png"; MASK="auto_shirt_mask.png"; OUT="SAJ6O4sj_auto_inpaint.png"
+img=cv2.imread(IMG); hsv=cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+# pink tank top: tune H/S/V for your file
+lo=np.array([160,60,120]); hi=np.array([179,255,255])
+m=cv2.inRange(hsv, lo, hi)
+# keep central torso, exclude skin/background
+roi=np.zeros_like(m); H,W=m.shape
+poly=np.array([[.34,.28],[.66,.28],[.68,.58],[.32,.58]])*np.array([W,H])
+cv2.fillPoly(roi,[poly.astype(np.int32)],255); m=cv2.bitwise_and(m,roi)
+m=cv2.morphologyEx(m, cv2.MORPH_CLOSE, np.ones((9,9),np.uint8))
+m=cv2.morphologyEx(m, cv2.MORPH_OPEN, np.ones((3,3),np.uint8))
+m=cv2.dilate(m, np.ones((7,7),np.uint8), iterations=1)
+m=cv2.GaussianBlur(m,(0,0),feather) # feather param
+cv2.imwrite(MASK,m)
+subprocess.run([sys.executable,"comfy_inpaint.py",IMG,MASK,OUT,"0.32","pink tank top hangs loosely...", "large chest, tight..."],check=True)
+```
+
+Need need line count under 60. Need need maybe use `feather=6` variable. Need need `poly` syntax: `np.array([...], dtype=np.float32) * np.array([W,H], dtype=np.float32)` then `.astype(np.int32)`. Need need create `roi` and `cv2.fillPoly(roi, [poly], 255)`. Need need maybe `m = cv2.bitwise_and(m, roi)`. Need need maybe include second HSV range for pink hue wrapping around 0? Pink in HSV likely around 170 (OpenCV H 0-179) or 0-10 for red-pink. Need need robust: combine two ranges: `lo1=[0,50,100], hi1=[10,255,255]` and `lo2=[160,50,100], hi2=[179,255,255]`; `m = cv2.bitwise_or(cv2.inRange(...), cv2.inRange(...))`. Need need include to handle pink/red. Need maybe use H 150-179 and 0-10. Need good. Need need adjust `lo/hi` as params. Need maybe need "strength = HSV tolerance / morph kernel / dilate". Need need maybe include "denoise" from B CLI. Good.
+
+But approach B script under 60 lines with CLI and workflow builder. Need need maybe include prompt injection. Need need code under 60 lines. Let's draft carefully.
+
+Approach B code:
+
+```
+# comfy_inpaint.py  (approach B; also used by approach C)
+import json, time, sys, requests
+from pathlib import Path
+from PIL import Image, ImageFilter
+
+URL="http://127.0.0.1:8188"
+WF="inpaint_api.json"          # API-format workflow from ComfyUI, see notes below
+img, mask, out = sys.argv[1:4]
+denoise = float(sys.argv[4]) if len(sys.argv)>4 else 0.32
+pos = sys.argv[5] if len(sys.argv)>5 else "..."
+neg = sys.argv[6] if len(sys.argv)>6 else "..."
+feather = float(sys.argv[7]) if len(sys.argv)>7 else 6.0
+
+def upload(p, kind="input"):
+    r=requests.post(f"{URL}/upload/image", files={"image":(Path(p).name,open(p,"rb"))},
+                    data={"type":kind,"overwrite":"true"}, timeout=60); r.raise_for_status()
+    j=r.json(); return f"{j.get('subfolder','')}/{j['name']}".lstrip("/") if j.get('subfolder') else j["name"]
+
+# feather hand mask, then upload
+m=Image.open(mask).convert("L").filter(ImageFilter.GaussianBlur(feather))
+m.save("_mask_feathered.png")
+img_name, mask_name = upload(img), upload("_mask_feathered.png")
+
+def set_input(wf, cls, key, val):
+    for n in wf.values():
+        if n.get("class_type")==cls and key in n.get("inputs",{}):
+            n["inputs"][key]=val; return
+    raise RuntimeError(f"{cls}.{key} not found")
+
+wf=json.load(open(WF,encoding="utf-8"))
+set_input(wf,"LoadImage","image",img_name)
+set_input(wf,"LoadImageMask","image",mask_name)
+set_input(wf,"KSampler","denoise",denoise)
+set_input(wf,"CLIPTextEncode","text",pos)  # first positive; edit workflow to separate neg
+# If workflow has two CLIPTextEncode nodes, set negative by index:
+enc=[n for n in wf.values() if n.get("class_type")=="CLIPTextEncode"]
+if len(enc)>1: enc[1]["inputs"]["text"]=neg
+# Optional: set grow_mask_by
+for n in wf.values():
+    if n.get("class_type")=="VAEEncodeForInpaint" and "grow_mask_by" in n["inputs"]:
+        n["inputs"]["grow_mask_by"]=6
+r=requests.post(f"{URL}/prompt", json={"prompt":wf}); r.raise_for_status(); pid=r.json()["prompt_id"]
+while True:
+    h=requests.get(f"{URL}/history/{pid}", timeout=30).json()
+    if pid in h: break
+    time.sleep(1)
+node=next(n for n in h[pid]["outputs"].values() if "images" in n)
+i=node["images"][0]
+data=requests.get(f"{URL}/view", params={"filename":i["filename"],"subfolder":i.get("subfolder",""),"type":i.get("type","output")}, timeout=60).content
+open(out,"wb").write(data)
+print("saved",out)
+```
+
+Need count lines. Let's count roughly: 1 comment, 2 import json..., 3 from pathlib, 4 from PIL, 5 blank, 6 URL, 7 WF, 8 img..., 9 denoise, 10 pos, 11 neg, 12 feather, 13 blank, 14 def upload, 15 r=..., 16 data=... (line continuation?), 17 j=..., 18 blank, 19 # feather..., 20 m=..., 21 m.save, 22 img_name..., 23 blank, 24 def set_input, 25 for n..., 26 if..., 27 n..., 28 raise, 29 blank, 30 wf=..., 31 set_input LoadImage, 32 LoadImageMask, 33 KSampler, 34 CLIPTextEncode, 35 # If workflow..., 36 enc=..., 37 if len..., 38 # Optional..., 39 for n..., 40 if..., 41 n..., 42 r=requests.post..., 43 while True:, 44 h=..., 45 if..., 46 time.sleep, 47 node=..., 48 i=..., 49 data=..., 50 open..., 51 print. Under 60. Need need include note about workflow JSON needs nodes. Need maybe in prose mention "Export an API-format inpaint workflow from ComfyUI containing LoadImage, LoadImageMask, VAEEncodeForInpaint, KSampler, VAEDecode, SaveImage, with your anime checkpoint/LoRA already selected." Need maybe need include LoRA? Need set checkpoint/LoRA in workflow. Need maybe need "Do not design full pipeline" but workflow from ComfyUI is fine. Need need not include full JSON; the skeleton is runnable with `inpaint_api.json`. Need need maybe if `LoadImageMask` not available, can use `LoadImage` alpha channel. Need maybe mention fallback. Need need need "adjusted parameters: strength/denoise, mask feather, grow_mask_by, CFG, steps, prompt". Need need "risks: line-art distortion, color seams, changes to face if mask includes collarbone/face; LoRA may drift identity; low denoise reduces but doesn't eliminate." Need "VRAM: ~4-6 GB local for SD1.5 at 768-1024, 6-8 GB with LoRA/ControlNet; use Runpod for SDXL/hires; 0 local if remote." Need maybe mention "full-frame VAE encode/decode".
+
+Need maybe approach B code uses `requests.post(... files={"image":(Path(p).name,open(p,"rb"))})`; need close file? Could use `with open`. Need minimal; but leaving file handle open not ideal. Could implement:
+
+```
+def upload(p):
+    with open(p,"rb") as f:
+        r=requests.post(..., files={"image":(Path(p).name,f)}, ...)
+    ...
+```
+
+Need better. Need include `timeout`. Need need maybe `data={"type":"input","overwrite":"true","subfolder":""}`. Need response `name` may include subfolder; use `j["name"]`. Need if subfolder returned, combine. Fine.
+
+Need need `set_input(wf,"CLIPTextEncode","text",pos)` sets first CLIPTextEncode; if workflow has negative first, then enc[1] overwritten with neg. Need maybe better: set positive by index 0, negative by index 1. Need maybe use `enc[0]["inputs"]["text"]=pos; if len(enc)>1: enc[1]["inputs"]["text"]=neg`. Need avoid `set_input` for text. Need code:
+
+```
+enc=[n for n in wf.values() if n.get("class_type")=="CLIPTextEncode"]
+enc[0]["inputs"]["text"]=pos
+if len(enc)>1: enc[1]["inputs"]["text"]=neg
+```
+
+Need need if workflow has more than 2 (e.g., LoRA prompt?) then maybe wrong. Need mention "first two CLIPTextEncode nodes are positive/negative; adjust IDs in exported workflow." Good.
+
+Need need maybe set `KSampler` `denoise` only if present; if using `KSamplerAdvanced` maybe not. Need mention. Need maybe set `seed`? Not necessary. Need maybe set `steps`? Adjustable in workflow. Need need maybe `cfg`. Fine.
+
+Need approach A code under 60 lines. Need draft.
+
+```
+# warp_chest.py  (approach A)
+import cv2, numpy as np
+IMG, OUT = "SAJ6O4sj.png", "SAJ6O4sj_warp.png"
+img = cv2.imread(IMG); H,W = img.shape[:2]
+# normalized polygon around pink tank/chest only; tune to target
+P = np.array([[.34,.29],[.66,.29],[.68,.57],[.32,.57]], np.float32) * [W,H]
+mask = np.zeros((H,W), np.uint8); cv2.fillPoly(mask, [P.astype(np.int32)], 255)
+feather = 18
+soft = cv2.GaussianBlur(mask, (0,0), feather).astype(np.float32)/255.0
+cx, cy = W*0.50, H*0.42
+rx, ry = W*0.18, H*0.17
+yy, xx = np.mgrid[0:H,0:W].astype(np.float32)
+r2 = ((xx-cx)/rx)**2 + ((yy-cy)/ry)**2
+fall = np.exp(-2.0*r2) * (soft > 0.001)
+strength = 0.18      # horizontal squeeze toward centre
+vertical = 10.0      # px: sample slightly lower/higher to flatten underbust
+map_x = xx + (xx-cx) * strength * fall
+map_y = yy + vertical * fall
+warp = cv2.remap(img, map_x, map_y, cv2.INTER_LANCZOS4, cv2.BORDER_REFLECT)
+# optional: keep arms/background/face exactly by soft blend
+a = soft[...,None]
+out = (warp*a + img*(1-a)).clip(0,255).astype(np.uint8)
+cv2.imwrite(OUT, out); print("saved", OUT)
+```
+
+Need count lines: 1 comment,2 import,3 IMG,4 img,5 # normalized,6 P,7 mask,8 feather,9 soft,10 cx,11 rx,12 yy,13 r2,14 fall,15 strength,16 vertical,17 map_x,18 map_y,19 warp,20 # optional,21 a,22 out,23 cv2.imwrite. Under 60. Need need `P * [W,H]` works? P shape (4,2) float32, list [W,H] int => broadcast to (4,2), yes. Need need `cv2.fillPoly(mask, [P.astype(np.int32)], 255)` okay. Need `np.mgrid[0:H,0:W].astype(np.float32)` returns shape (2,H,W) and assigning to `yy, xx` works? `yy, xx = np.mgrid[0:H,0:W].astype(np.float32)` yes unpack first axis. Need `soft > 0.001` boolean cast multiply with float fall? `fall = np.exp(-2.0*r2) * (soft > 0.001)` results float * bool -> float. Good. Need `map_y = yy + vertical * fall`; if vertical positive, output samples lower source (content moves up? Let's think: dst(y)=src(y+vertical*fall). A feature originally at source y0 appears at dst y = y0 - vertical*fall, i.e., moves up. Underbust folds move up, maybe not desired. Need want flatten underbust, maybe move lower chest down? Need reference tank top hangs loosely from shoulders, lower hem maybe at belt; target has underbust tension wrinkles. Need maybe vertical stretch rather than shift. Need maybe `map_y = cy + (yy-cy)*(1 - 0.06*strength*fall)` to stretch vertically. Let's think: sy<1 => dst y samples src cy + (y-cy)*sy. A feature at src y0 appears at dst y = cy + (y0-cy)/sy > y0 if sy<1, moves down. That stretches downward, making fabric hang. Good. Need use `map_y = cy + (yy-cy)*(1 - 0.5*strength*fall)` maybe with strength=0.18 -> sy=0.91. Need maybe more intuitive. Need maybe include `vertical_drop` parameter? Let's set `vertical_stretch=0.08` (fraction) and `map_y = cy + (yy-cy)*(1 - vertical_stretch*fall)`. Need need maybe hidden relation to `vertical` parameter. Need maybe include `vertical=0.08`. Need code:
+
+```
+vertical = 0.08  # fraction: slight downward drape / vertical stretch
+map_y = cy + (yy-cy) * (1.0 - vertical*fall)
+```
+
+Need need if fall decays to 0, map_y=cy+(yy-cy)*1=yy. Good. Need need maybe map_x uses `1 + strength*fall` via `xx + (xx-cx)*strength*fall` same. Good. Need mention adjust `strength` (0.10-0.25), `vertical` (0-0.15), `feather` (8-30 px), polygon. Need "denoise: N/A". Need expected risks: line-art distortion (neckline/armholes/side seams bending), duplicated belt/hem if mask too low, color seams if feather too small, face unchanged if polygon below .29H but collarbone/neckline may shift; background unaffected. Need VRAM 0 GB CPU/GPU optional; OpenCV CPU only, <1 GB RAM. Need maybe "no VRAM".
+
+Need approach C code with auto mask + call B. Need maybe need include `feather` and `denoise` args. Need need B CLI order include feather as 7th arg. Need C call must pass pos/neg/feather? Need define B CLI: `img, mask, out, denoise, pos, neg, feather`. Need C call: `[sys.executable,"comfy_inpaint.py",IMG,MASK,OUT,str(denoise),POS,NEG,str(feather)]`. Need need B code parse feather from sys.argv[7]. Need need C code under 60 lines. Need draft.
+
+```
+# auto_mask_inpaint.py (approach C; run after saving approach B as comfy_inpaint.py)
+import cv2, numpy as np, subprocess, sys
+IMG, MASK, OUT = "SAJ6O4sj.png", "auto_shirt_mask.png", "SAJ6O4sj_auto.png"
+img = cv2.imread(IMG); H,W = img.shape[:2]
+hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+# pink/red tank top; widen these if shirt is shaded
+r1 = cv2.inRange(hsv, (0,45,90), (12,255,255))
+r2 = cv2.inRange(hsv, (155,45,90), (179,255,255))
+m = cv2.bitwise_or(r1,r2)
+# constrain to torso so face/hair/gloves/background are untouched
+roi = np.zeros((H,W), np.uint8)
+P = np.array([[.33,.27],[.67,.27],[.69,.59],[.31,.59]], np.float32) * [W,H]
+cv2.fillPoly(roi, [P.astype(np.int32)], 255)
+m = cv2.bitwise_and(m, roi)
+k = np.ones((7,7), np.uint8)
+m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, k)
+m = cv2.morphologyEx(m, cv2.MORPH_OPEN, np.ones((3,3),np.uint8))
+m = cv2.dilate(m, np.ones((5,5),np.uint8), iterations=1)
+feather, denoise = 6.0, 0.30
+m = cv2.GaussianBlur(m, (0,0), feather)
+cv2.imwrite(MASK, m)
+POS = "small flat chest, loose pink tank top hanging from shoulders, soft vertical drape folds, clean anime line art"
+NEG = "large breasts, tight stretched tank top, underbust tension wrinkles, changed face, extra arms"
+subprocess.run([sys.executable, "comfy_inpaint.py", IMG, MASK, OUT, str(denoise), POS, NEG, str(feather)], check=True)
+```
+
+Need count lines: 1 comment,2 import,3 IMG,4 img,5 hsv,6 # pink,7 r1,8 r2,9 m,10 # constrain,11 roi,12 P,13 cv2.fillPoly,14 m=,15 k=,16 morph close,17 morph open,18 dilate,19 feather,20 GaussianBlur,21 imwrite,22 POS,23 NEG,24 subprocess.run. Under 60. Need need note: `cv2.GaussianBlur` on uint8 mask with feather yields grayscale; ComfyUI `LoadImageMask` channel red works. Need need B also feathers again; double feather. Need maybe avoid double feather: B always applies `feather` from CLI. If C already blurs, B will blur again. Need maybe pass `0` to B to avoid double, or have B accept feather=0. Need maybe set `feather=6` in C and pass `0` to B? But B's feather param also uploads mask; if C already feathered, pass `0` to B. Need need maybe C code should not blur and let B do feather. But C needs create mask; could save hard mask and pass feather to B. That is cleaner. Need adjust C: no `cv2.GaussianBlur` in C; just `cv2.imwrite(MASK, m)`; pass `feather` to B. Need B will blur. Need need C code still has adjustable feather. Good. Need change code accordingly. Need maybe need `m` might have holes in shaded pink; morphology close helps. Need need "strength" = HSV thresholds / morph kernel / dilate. Need "denoise" passed. Need risks: HSV may miss shaded folds or include skin/lips/gloves/red tools; ROI limits; auto mask can eat neckline/armholes/line art; low denoise may still change line art; face safe if ROI excludes it; color seams if feather too low. VRAM same as B. Need maybe mention segmentation alternative (rembg / SAM) would be heavier; color threshold is lightweight. Need maybe "libraries: opencv-python, numpy, plus requests/Pillow from B". Need need maybe "segmentation" mention optional `cv2.grabCut` but not code. Need maybe code uses color not segmentation. Need maybe need "automatic mask creation from pink tank top by color or segmentation" done. Good.
+
+Need maybe approach D? Need maybe 3 approaches enough. Need need include hand-off prompt for complex design. Need maybe after approach C, add "Complex option not designed (hand-off prompt)" before table. Need need self-contained hand-off prompt with goal, inputs, outputs, constraints, environment. Need maybe include in blockquote. Need need not generate images. Need need not design full pipeline. Need maybe mention "Do not implement here". Need need maybe include "Another model should design a reference-guided, segmentation-aware, ControlNet/IP-Adapter retouch pipeline..." Need need include goal, inputs: reference `maniol-anikawa-current_p2.png`, target `SAJ6O4sj.png`, optional hand mask, ComfyUI API; outputs: edited PNG, mask, JSON params; constraints: keep face/hair/arms/background/belt unchanged, no new image generation from scratch, semi-automatic, 8GB VRAM local / Runpod for heavy, no full architecture here; environment: Python, ComfyUI, SD anime checkpoint + character LoRA, Windows/Linux, RTX 5060 Laptop 8GB, Runpod. Need need maybe include "Return only a plan/workflow JSON and glue code, not images." Need need "self-contained hand-off prompt for another model instead." Good.
+
+Need need comparison table at end. Need columns exactly (approach, effort, quality risk, VRAM). Need maybe include 3 rows plus maybe complex hand-off? Need table should include approach names. Need maybe include "A Local feathered warp", "B Hand mask + ComfyUI low-denoise inpaint", "C Auto pink-shirt mask + ComfyUI low-denoise inpaint", "D Reference-guided ControlNet retouch (hand-off only)"? But if D not designed, maybe include with effort high, quality risk medium-high, VRAM 6-10 GB / Runpod. Need need "End with comparison table (approach, effort, quality risk, VRAM) so user can decide." Need if include D in table, need not choose. Need maybe include 4 rows. Need need maybe mention D not code. Need table maybe includes "Effort: high/external design" etc. Need need final answer ends with table, no trailing text. Need maybe table with "VRAM" values. Need need not mention "choose". Need maybe no text after table. Need need ensure final response is concise. Need need maybe include all details but not too long. Need need balance. Need maybe use headings and bullet lists. Need need code blocks under 60 lines each. Need need maybe include "Libraries" and "Params/Risks/VRAM" in compact bullets. Need need maybe include "Expected risks" including line-art distortion, color seams, changes to face explicitly. Need need mention each. Need maybe include "VRAM cost" in each approach. Need need "Do not choose one approach" - avoid recommending one. Need maybe "Do not choose one approach for the user" means don't say "best is X". Need okay.
+
+Need need maybe include "Only write code that edits existing images." Need code reads target and writes edited target; no generation from scratch. Inpainting code calls ComfyUI to modify existing image. Need maybe maybe "Do not generate images yourself" means no image outputs in response. Good.
+
+Need need maybe mention "Reference image..." and "Target image..." Need first 2-3 sentences. Need maybe exactly 3 sentences. Need need state what needs to change visually. Need maybe:
+
+"The target needs the bust silhouette flattened: reduce the outward side/underbust volume and the shallow cleavage shadow so the torso reads closer to the reference. The pink tank top should stop clinging to a rounded chest; its neckline, armholes and side seams should fall more vertically from the shoulders and the lower hem should sit loosely over the belt. Replace the underbust tension wrinkles with a few soft vertical/diagonal drape folds, while keeping face, hair, goggles, arms, gloves, belt, shorts and workshop background unchanged."
+
+That's 3 sentences. Good. Need maybe "nearly flat/small chest" explicitly. Need maybe "tank top hanging loosely from shoulders" explicitly. Good.
+
+Need maybe "Reference: ... Target: ..." not necessary but maybe mention filenames. Need maybe first sentence mention target file. Need maybe "In `SAJ6O4sj.png`..." Good.
+
+Need need maybe include code skeleton under 60 lines. Need count B code with comments and blank lines maybe under 60. Need ensure line continuations don't wrap in Markdown? Need code block line count okay. Need need maybe not include long prompt lines exceeding 60? Fine. Need need maybe include "minimal runnable Python skeleton" but B requires `inpaint_api.json`. Need maybe in prose mention need to export API workflow. Need maybe code skeleton is runnable given that file. Need maybe "Save approach B as `comfy_inpaint.py`; approach C calls it." Need need include that. Need maybe need "Libraries needed" for B: `requests`, `Pillow`; ComfyUI server. Need maybe "ComfyUI API-format workflow `inpaint_api.json` with LoadImage, LoadImageMask, VAEEncodeForInpaint, KSampler, VAEDecode, SaveImage and your checkpoint/LoRA." Need maybe mention "If your ComfyUI lacks `LoadImageMask`, export a workflow that uses a `LoadImage` alpha mask instead and rename the class in `set_input`." Need maybe not too much. Need maybe need "denoise" vs "strength". Need maybe "strength = denoise". Good.
+
+Need maybe need approach A code uses no mask file but normalized polygon. Need maybe "libraries: opencv-python, numpy". Need maybe "mask feather" parameter. Need "denoise: N/A". Good.
+
+Need maybe approach C code uses B script. Need "libraries: opencv-python, numpy, plus B's requests/Pillow". Need "adjustable params: HSV ranges (strength), ROI polygon, morph/dilate kernels, feather, denoise, prompt." Need "risks: ...". Need "VRAM: same as B". Good.
+
+Need maybe need include "expected risks (line-art distortion, color seams, changes to the face)" for each. Need explicit. Need maybe for A: "Line-art: neckline/side seams can bend; color seams: hard mask edge if feather too small; face: unchanged if polygon starts below ~0.27H, but collarbone/neckline may shift." Need for B: "Line-art: regenerated strokes may not match; color seams: pink tone mismatch at mask edge; face: safe unless mask/denoise reaches collarbone/face; LoRA identity drift possible." Need for C: "Line-art: auto mask may erase outlines/shaded folds; color seams: threshold edge + double feather; face: ROI excludes it, but skin pixels near collarbone can be masked." Need maybe include "changes to face" explicit. Good.
+
+Need maybe need "VRAM cost" for A: "0 GB VRAM (CPU OpenCV), <1 GB RAM." For B/C: "≈4–6 GB at 768–1024 px SD1.5 + LoRA; 6–8 GB with ControlNet/hires; 0 GB local if Runpod." Need maybe "full image VAE encode/decode still allocates". Need maybe "RTX 5060 Laptop 8 GB should fit low-res; use Runpod for SDXL." Good.
+
+Need maybe need "Runpod available for heavier steps" mention in B/C. Good.
+
+Need maybe need "Keep local workloads lightweight" - A/C CPU lightweight; B/C ComfyUI local maybe moderate; mention use Runpod for heavier. Good.
+
+Need maybe need "final image may be retouched by hand" mention "semi-automatic result acceptable; hand-retouch line art after." Need maybe in intro or hand-off. Good.
+
+Need need maybe include "Do not generate images yourself" - no images. Good.
+
+Need maybe need "Only write code that edits existing images" - code uses imread/imwrite and ComfyUI inpaint on existing image. Need maybe no `TextToImage` or random latent from scratch. Need maybe ensure workflow uses `VAEEncodeForInpaint` with target image latent, not empty latent. Need mention. Good.
+
+Need maybe need "low denoise" in B/C: set 0.30/0.32. Need maybe "denoise 0.25–0.40" adjust. Good.
+
+Need maybe need "strength" for B/C: "strength = denoise; also prompt/CFG". Need maybe "mask feather" and "grow_mask_by". Good.
+
+Need maybe need "automatic mask creation from pink tank top by color or segmentation, then inpainting" - C code uses color. Need maybe mention "swap `r1/r2` for a SAM/rembg segmentation mask if color fails" but not design. Need maybe not include heavy segmentation. Good.
+
+Need maybe need "If an approach would need complex design (full pipeline or architecture), do not design it. Write a self-contained hand-off prompt ... for another model instead." Need include. Need maybe heading "Complex direction not designed (hand-off prompt)". Need maybe include prompt in blockquote. Need maybe need not include code skeleton for that approach. Need maybe phrase: "A reference-guided ControlNet/IP-Adapter + pose/segmentation pipeline would need a full architecture, so per instruction 5 I am not designing it; use this hand-off prompt instead." Need then prompt. Need need "goal, inputs, outputs, constraints, environment" explicitly. Need maybe include bullet list inside quote. Need maybe keep concise. Need maybe no code. Need maybe need "for another model" explicitly. Good.
+
+Need maybe need "End with comparison table". Need table last. Need maybe include 4 rows including complex hand-off. Need maybe table columns exactly "Approach", "Effort", "Quality risk", "VRAM". Need maybe include "D (hand-off only)" row. Need maybe note "D: not implemented here". Need maybe table: 
+| A Local feathered warp | Low; tune polygon/strength | Medium: bent line art, seams; face safe | 0 GB |
+| B Hand mask + ComfyUI low-denoise inpaint | Medium; draw mask + export workflow | Medium: redrawn lines, pink seams, possible identity drift if denoise high | 4–6 GB local / 0 on Runpod |
+| C Auto color mask + ComfyUI low-denoise inpaint | Low–medium; tune HSV/ROI | Medium–high: mask may eat outlines/shading; face safe if ROI tight | same as B |
+| D Reference-guided ControlNet retouch (hand-off only) | High; external design | Medium–high; depends on pipeline | 6–10 GB, prefer Runpod |
+
+Need maybe "Quality risk" include line-art/color seams/face changes? Table can be short. Need maybe "VRAM" for D. Need need "effort" etc. Good.
+
+Need maybe need "Do not choose one approach for the user." Table no recommendation. Good.
+
+Need maybe need "Keep reply concise." Need not over-explain. Need maybe include code blocks with comments; okay. Need maybe ensure no long prose. Need maybe maybe too long? Need need maybe 4 sections + table. Need need code blocks 3 * ~25-50 lines. That's okay. Need maybe keep each approach details compact.
+
+Need need check code B line count with CLI: Need write final code carefully. Need maybe avoid line too long? Not issue. Need maybe include `requests` import; `json, time, sys, requests`; `Path`; `Image, ImageFilter`. Need `WF` variable. Need `img, mask, out = sys.argv[1:4]`; if no args, error. Need maybe add default args? Minimal. Need maybe add `if len(sys.argv) < 4: raise SystemExit("usage: ...")`. Need line count. Need maybe include. Need maybe no `argparse` to save lines. Need maybe `denoise = float(sys.argv[4]) if len(sys.argv) > 4 else 0.32`. Need `pos`, `neg`, `feather`. Good.
+
+Need maybe `upload` function:
+
+```
+def upload(p):
+    with open(p, "rb") as f:
+        r = requests.post(f"{URL}/upload/image",
+            files={"image": (Path(p).name, f)},
+            data={"type": "input", "subfolder": "", "overwrite": "true"}, timeout=60)
+    r.raise_for_status(); j = r.json()
+    return (j.get("subfolder","") + "/" + j["name"]).lstrip("/") if j.get("subfolder") else j["name"]
+```
+
+Need line count maybe 7 lines. Good. Need maybe `Path(p).name` for `_mask_feathered.png`. Good.
+
+Need `set_input` function:
+
+```
+def set_input(wf, cls, key, val):
+    for n in wf.values():
+        if n.get("class_type") == cls and key in n.get("inputs", {}):
+            n["inputs"][key] = val; return
+    raise RuntimeError(f"missing {cls}.{key}")
+```
+
+Need maybe if `LoadImageMask` not in workflow, error. Need mention fallback. Good.
+
+Need `enc` list: order of `wf.values()` in Python 3.7+ preserves JSON insertion order; exported workflow order may not be positive then negative. Need maybe better to set by node IDs from workflow? Need maybe user can adjust. Need maybe mention "first two CLIPTextEncode nodes in JSON order are treated as positive/negative; reorder or edit IDs if needed." Good. Need maybe code can set positive/negative by `set_input` with `CLIPTextEncode` plus index. Need maybe okay.
+
+Need maybe `KSampler` denoise: In ComfyUI, `KSampler` input `denoise` exists. Need okay. Need maybe if using `KSamplerAdvanced`, not. Need mention. Need maybe set `VAEEncodeForInpaint` `grow_mask_by`. Need maybe code. Good.
+
+Need `r=requests.post(f"{URL}/prompt", json={"prompt": wf}, timeout=30)`. Need maybe `client_id` not needed. Need maybe `r.raise_for_status(); pid = r.json()["prompt_id"]`. Need maybe polling. Need `h=requests.get(...).json()`; if pid in h: break. Need maybe if error, outputs may be missing; but minimal. Need maybe `node = next(n for n in h[pid]["outputs"].values() if "images" in n)`. Need maybe `i = node["images"][0]`. Need `params` include `filename`, `subfolder`, `type`. Need maybe `type` default "output". Need `open(out,"wb").write(data)`. Need maybe `print`. Good.
+
+Need maybe need "The workflow must be img2img/inpaint (VAEEncodeForInpaint), not text-to-image/EmptyLatentImage." Need mention in prose. Good.
+
+Need approach C code: Need call B script with `feather` passed. Need B will blur mask. Good. Need need maybe C's `MASK` hard mask; B uploads blurred version. Need maybe C code should not double blur. Need need maybe `cv2.imwrite(MASK, m)`. Good. Need need maybe `feather, denoise = 6.0, 0.30`. Need `subprocess.run([... str(feather)])`. Need B parses feather as float. Good.
+
+Need maybe need `cv2.inRange(hsv, (0,45,90), (12,255,255))` - OpenCV expects tuple or np.array; tuple works? `cv2.inRange(src, lowerb, upperb)` lowerb can be tuple; yes. Need maybe `r2 = cv2.inRange(hsv, (155,45,90), (179,255,255))`. Need maybe pink hue in OpenCV could be 160-179 or 0-10; good. Need maybe saturation 45 to include shaded pink; value 90. Need maybe include "widen thresholds if shaded shirt is missed". Good.
+
+Need maybe `P * [W,H]` with list; okay. Need maybe `cv2.fillPoly(roi, [P.astype(np.int32)], 255)`; okay. Need maybe `m = cv2.bitwise_and(m, roi)`. Need maybe `k = np.ones((7,7), np.uint8)`; close then open. Need maybe `dilate`. Need maybe need "dilate to include anti-aliased outlines". Good.
+
+Need maybe approach A code: Need maybe ensure mask polygon below face. Need maybe normalized y .29 to .57. Target image height maybe 1280; face ends around .28? Need okay. Need maybe "tune to target". Need maybe `cx, cy = W*0.50, H*0.42`; `rx, ry = W*0.18, H*0.17`. Need maybe `fall = np.exp(-2.0*r2) * (soft > 0.001)`. Need maybe `map_x = xx + (xx-cx)*strength*fall`; `map_y = cy + (yy-cy)*(1.0 - vertical*fall)`. Need maybe `vertical=0.08`. Need maybe `warp = cv2.remap(... BORDER_REFLECT)`. Need maybe `a = soft[...,None]`; `out = (warp*a + img*(1-a)).clip(0,255).astype(np.uint8)`. Need maybe `img` uint8, `warp` uint8, `a` float32; result float64? fine. Need maybe `cv2.imwrite`. Good. Need maybe need "denoise: N/A (no diffusion)". Good.
+
+Need maybe need mention "mask feather" for A: `feather=18` px. Good. Need "strength=0.18", "vertical=0.08". Need "denoise: N/A". Need maybe "expected risks: ..." Good.
+
+Need maybe need "libraries needed" for A: `opencv-python`, `numpy`. Need maybe "No ComfyUI". Good.
+
+Need maybe need "VRAM cost" for A: "0 GB VRAM; CPU only." Good.
+
+Need maybe need "Runpod available for heavier steps" in B/C. Good.
+
+Need maybe need "semi-automatic result acceptable; hand retouch by pen tablet" maybe mention "All outputs are PNGs for hand retouch." Need maybe in intro or after first sentences: "All code below reads `SAJ6O4sj.png` and writes a new PNG for pen-tablet cleanup." Good. Need need 2-3 sentences first? The instruction says "First, state in 2-3 sentences what needs to change visually..." Need maybe first 3 sentences exactly visual goal; then a separate sentence "All code..."? That would be 4th sentence before approaches. Need maybe "First" means initial paragraph 2-3 sentences. Need maybe keep visual goal in 3 sentences; then next paragraph "All snippets..." can be separate. Need okay. Need maybe first 3 sentences only visual. Need maybe include "All snippets read..." in 4th sentence? Might violate "First, state in 2-3 sentences..." It's okay if first paragraph is 3 sentences, then another paragraph. Need maybe good.
+
+Need maybe need "Do not generate images yourself." Need maybe avoid "Here are images". No images. Good.
+
+Need maybe need "Only write code that edits existing images." Need maybe code doesn't generate new from scratch. Need maybe in B/C workflow uses inpaint on existing latent. Need mention. Good.
+
+Need maybe need "If an approach would need complex design ... do not design it." Need maybe include hand-off prompt. Need maybe not include code skeleton for complex approach. Need maybe maybe need include "Libraries needed" etc for complex approach? Could include a compact line: "Not designed here; libraries/params/risks/VRAM are for the other model to specify. Hand-off prompt:" But instruction 3 says for each approach. Need maybe table includes D. Need maybe to be safe, include for D a "minimal runnable Python skeleton" that writes the hand-off prompt to a text file? That would not edit images. Hmm. Need think more.
+
+Maybe we can include 4 approaches where the 4th is lightweight "manual mask + OpenCV seamlessClone / Poisson blend of a vertically stretched shirt patch" with code. Then no complex approach is proposed, so instruction 5 not triggered. But user explicitly says "If an approach would need complex design..., do not design it. Write a self-contained hand-off prompt ... instead." Could we intentionally not propose any complex approach, and still include a hand-off prompt for a complex direction that is not one of the approaches? That satisfies. Need maybe no conflict with approach 3. Need maybe table with 3 rows plus complex hand-off row? Need maybe if D not an approach, table can include it as "Complex direction (hand-off, not counted)" to help decide. Need maybe okay.
+
+Need maybe need 3 to 4 distinct approaches. We can propose exactly 3. Need maybe "Propose 3 to 4 distinct approaches" satisfied. Need maybe "For each approach give..." satisfied for 3. Need "If an approach would need complex design..." We can say "A 4th reference-guided ControlNet/IP-Adapter option would need complex design, so I am not proposing/designing it; here is a hand-off prompt instead." Need then table can include 3 approaches plus maybe a row for "Complex hand-off (not an approach)"? Need table columns approach, effort, quality risk, VRAM. Need maybe include 4 rows to let user decide including complex. Need maybe "Do not choose one approach" okay. Need maybe "End with comparison table" final. Good.
+
+Need maybe need "If an approach would need complex design (full pipeline or architecture), do not design it. Write a self-contained hand-off prompt ... for another model instead." Need maybe include prompt before table. Need maybe "self-contained" means includes all context. Need need include filenames, goal, inputs, outputs, constraints, environment. Need maybe include "Do not generate images; return workflow JSON + glue code only." Good. Need maybe need "another model" explicitly. Good.
+
+Need maybe need "Keep local workloads lightweight" in hand-off constraints. Need maybe "RTX 5060 Laptop 8GB; use Runpod for heavy." Good.
+
+Need maybe need "final image may be retouched by hand" in hand-off constraints. Good.
+
+Need maybe need "Reference: maniol-anikawa-current_p2.png (target proportions...)" Need include in hand-off inputs. Good.
+
+Need maybe need "Target: SAJ6O4sj.png". Good.
+
+Need maybe need "ComfyUI is used for generation (SD-based anime checkpoint plus a character LoRA)." Need include in environment. Good.
+
+Need maybe need "semi-automatic result acceptable". Good.
+
+Need maybe need "Only write code that edits existing images." Need in hand-off constraints: "No text-to-image from empty latent; only img2img/inpaint/warp on existing target." Good.
+
+Need maybe need "Do not generate images" in hand-off outputs: "Return code/config only, no rendered images." Good.
+
+Need maybe need "No full pipeline design here" - prompt asks another model to design, not us. Good.
+
+Need maybe need "Libraries needed" for complex approach? Not needed if not an approach. But table can include "High / external design". Need maybe okay.
+
+Need maybe need "expected risks" for complex hand-off? Could mention in prompt constraints "risks to mitigate: line-art distortion, color seams, face changes". Need maybe table quality risk. Good.
+
+Need maybe need "VRAM cost" for complex: "6-10 GB; prefer Runpod". Good.
+
+Need maybe need "denoise" adjustable for complex? In hand-off prompt constraints: "expose denoise, mask feather, ControlNet weight". Need maybe okay.
+
+Need maybe need "Do not design full pipeline or architecture" - we won't. Need maybe no code skeleton for complex. Good.
+
+Need maybe need "Keep reply concise" - maybe don't overdo hand-off prompt. Need maybe concise but complete. Need maybe 1 paragraph prompt with bullet list; okay.
+
+Need maybe need "Reply in English only." Good.
+
+Need maybe need "Do not generate images." Good.
+
+Need maybe need "Do not choose one approach for the user." Avoid "recommended". Need maybe no "best". Good.
+
+Need maybe need "End with comparison table" final text exactly table. Need maybe no trailing newline after table? Fine. Need no text after table. Need maybe final answer ends with last table row. Good.
+
+Need maybe need "under 60 lines" - need ensure code blocks not >60 lines. Need count final code B carefully. Let's draft final code exactly and count lines.
+
+Approach A code final:
+
+```
+# warp_chest.py
+import cv2, numpy as np
+IMG, OUT = "SAJ6O4sj.png", "SAJ6O4sj_warp.png"
+img = cv2.imread(IMG); H, W = img.shape[:2]
+P = np.array([[.34,.29],[.66,.29],[.68,.57],[.32,.57]], np.float32) * [W,H]
+mask = np.zeros((H,W), np.uint8); cv2.fillPoly(mask, [P.astype(np.int32)], 255)
+feather, strength, vertical = 18.0, 0.18, 0.08
+soft = cv2.GaussianBlur(mask, (0,0), feather).astype(np.float32) / 255.0
+cx, cy, rx, ry = W*0.50, H*0.42, W*0.18, H*0.17
+yy, xx = np.mgrid[0:H,0:W].astype(np.float32)
+fall = np.exp(-2.0*(((xx-cx)/rx)**2 + ((yy-cy)/ry)**2)) * (soft > 0.001)
+map_x = xx + (xx-cx) * strength * fall
+map_y = cy + (yy-cy) * (1.0 - vertical * fall)
+warp = cv2.remap(img, map_x, map_y, cv2.INTER_LANCZOS4, cv2.BORDER_REFLECT)
+a = soft[..., None]
+out = (warp*a + img*(1-a)).clip(0,255).astype(np.uint8)
+cv2.imwrite(OUT, out); print("saved", OUT)
+```
+Count: 1 comment,2 import,3 IMG,4 img,5 P,6 mask,7 feather,8 soft,9 cx,10 yy,11 fall,12 map_x,13 map_y,14 warp,15 a,16 out,17 imwrite. Good. Need maybe "denoise: N/A" in params. Good.
+
+Approach B code final draft count:
+
+```
+# comfy_inpaint.py  (save as this name; approach C calls it)
+import json, time, sys, requests
+from pathlib import Path
+from PIL import Image, ImageFilter
+URL, WF = "http://127.0.0.1:8188", "inpaint_api.json"
+img, mask, out = sys.argv[1:4]
+denoise = float(sys.argv[4]) if len(sys.argv) > 4 else 0.32
+pos = sys.argv[5] if len(sys.argv) > 5 else "small flat chest, loose pink tank top, soft vertical drape folds"
+neg = sys.argv[6] if len(sys.argv) > 6 else "large breasts, tight fabric, underbust tension wrinkles, changed face"
+feather = float(sys.argv[7]) if len(sys.argv) > 7 else 6.0
+
+def upload(p):
+    with open(p, "rb") as f:
+        r = requests.post(f"{URL}/upload/image", files={"image": (Path(p).name, f)},
+                          data={"type":"input","subfolder":"","overwrite":"true"}, timeout=60)
+    r.raise_for_status(); j = r.json()
+    return (j.get("subfolder","") + "/" + j["name"]).lstrip("/") if j.get("subfolder") else j["name"]
+
+m = Image.open(mask).convert("L").filter(ImageFilter.GaussianBlur(feather))
+m.save("_mask_feathered.png")
+img_name, mask_name = upload(img), upload("_mask_feathered.png")
+
+def set_input(wf, cls, key, val):
+    for n in wf.values():
+        if n.get("class_type") == cls and key in n.get("inputs", {}):
+            n["inputs"][key] = val; return
+    raise RuntimeError(f"missing {cls}.{key}")
+
+wf = json.load(open(WF, encoding="utf-8"))
+set_input(wf, "LoadImage", "image", img_name)
+set_input(wf, "LoadImageMask", "image", mask_name)
+set_input(wf, "KSampler", "denoise", denoise)
+enc = [n for n in wf.values() if n.get("class_type") == "CLIPTextEncode"]
+enc[0]["inputs"]["text"] = pos
+if len(enc) > 1: enc[1]["inputs"]["text"] = neg
+for n in wf.values():
+    if n.get("class_type") == "VAEEncodeForInpaint" and "grow_mask_by" in n["inputs"]:
+        n["inputs"]["grow_mask_by"] = 6
+r = requests.post(f"{URL}/prompt", json={"prompt": wf}, timeout=30); r.raise_for_status()
+pid = r.json()["prompt_id"]
+while True:
+    h = requests.get(f"{URL}/history/{pid}", timeout=30).json()
+    if pid in h: break
+    time.sleep(1)
+node = next(n for n in h[pid]["outputs"].values() if "images" in n)
+i = node["images"][0]
+data = requests.get(f"{URL}/view", params={"filename": i["filename"],
+    "subfolder": i.get("subfolder",""), "type": i.get("type","output")}, timeout=60).content
+open(out, "wb").write(data); print("saved", out)
+```
+
+Count lines: 1 comment,2 import,3 from pathlib,4 from PIL,5 URL,6 img,7 denoise,8 pos,9 neg,10 feather,11 blank,12 def upload,13 with,14 r=,15 data=,16 r.raise,17 return,18 blank,19 m=,20 m.save,21 img_name,22 blank,23 def set_input,24 for n,25 if,26 n,27 raise,28 blank,29 wf=,30 set LoadImage,31 LoadImageMask,32 KSampler,33 enc=,34 enc[0],35 if len,36 for n,37 if,38 n,39 r=,40 pid=,41 while,42 h=,43 if,44 time.sleep,45 node=,46 i=,47 data=,48 params continuation,49 open. Under 60. Good. Need maybe `json.load(open(...))` leaves file unclosed; okay minimal. Need maybe `enc[0]` could IndexError if no CLIPTextEncode; workflow should have. Need maybe mention. Need maybe `LoadImageMask` may be `LoadImage` with alpha; mention. Need maybe `KSampler` denoise. Good.
+
+Need approach C code final count:
+
+```
+# auto_mask_inpaint.py  (uses comfy_inpaint.py from approach B)
+import cv2, numpy as np, subprocess, sys
+IMG, MASK, OUT = "SAJ6O4sj.png", "auto_shirt_mask.png", "SAJ6O4sj_auto.png"
+img = cv2.imread(IMG); H, W = img.shape[:2]
+hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+r1 = cv2.inRange(hsv, (0,45,90), (12,255,255))
+r2 = cv2.inRange(hsv, (155,45,90), (179,255,255))
+m = cv2.bitwise_or(r1, r2)
+roi = np.zeros((H,W), np.uint8)
+P = np.array([[.33,.27],[.67,.27],[.69,.59],[.31,.59]], np.float32) * [W,H]
+cv2.fillPoly(roi, [P.astype(np.int32)], 255)
+m = cv2.bitwise_and(m, roi)
+m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, np.ones((7,7), np.uint8))
+m = cv2.morphologyEx(m, cv2.MORPH_OPEN, np.ones((3,3), np.uint8))
+m = cv2.dilate(m, np.ones((5,5), np.uint8), iterations=1)
+cv2.imwrite(MASK, m)
+feather, denoise = 6.0, 0.30
+POS = "small flat chest, loose pink tank top hanging from shoulders, soft vertical drape folds, clean anime line art"
+NEG = "large breasts, tight stretched tank top, underbust tension wrinkles, changed face, extra arms"
+subprocess.run([sys.executable, "comfy_inpaint.py", IMG, MASK, OUT,
+                 str(denoise), POS, NEG, str(feather)], check=True)
+```
+
+Count: 1 comment,2 import,3 IMG,4 img,5 hsv,6 r1,7 r2,8 m,9 roi,10 P,11 fillPoly,12 m=,13 morph close,14 morph open,15 dilate,16 imwrite,17 feather,18 POS,19 NEG,20 subprocess.run continuation line 21. Under 60. Good. Need maybe note "B script will feather the hard mask; don't blur here." Good.
+
+Need maybe need "libraries needed: opencv-python, numpy, plus B's requests/Pillow; ComfyUI server." Good.
+
+Need maybe need "adjustable parameters: `r1/r2` HSV ranges (color strength), `P` ROI, morph/dilate kernels, `feather`, `denoise`, POS/NEG." Need maybe "mask feather" and "denoise". Good.
+
+Need maybe need "expected risks: ..." Good.
+
+Need maybe need "VRAM cost: same as B; mask creation CPU ~0 GB." Good.
+
+Need maybe need "Runpod" mention in B/C. Good.
+
+Need maybe need "line-art distortion, color seams, changes to face" for each. Need maybe explicit bullet. Need maybe compact:
+- Risks: line-art distortion (neckline/side seams bend), color seams (small feather), face changes (none if ROI/polygon below ~0.27H; collarbone can shift). Good.
+
+Need maybe need "denoise" for A/C? A: N/A. C: 0.30. B: 0.32. Good.
+
+Need maybe need "strength" for C: "HSV tolerance / morphology kernels". Good.
+
+Need maybe need "mask feather" in B: `feather` (0-12 px) and `grow_mask_by=6`. Good.
+
+Need maybe need "denoise" in B: `denoise` 0.25-0.40. Good.
+
+Need maybe need "strength" in B: "strength = denoise; also CFG/steps in workflow." Good.
+
+Need maybe need "expected risks" in B: "line-art redraw mismatch, pink color seams at mask edge, face changes only if mask reaches face/collarbone or denoise too high; LoRA identity drift." Good.
+
+Need maybe need "VRAM cost" in B: "SD1.5/anime + LoRA at 768-1024 px: ~4-6 GB; ControlNet/hires/SDXL: 6-8+ GB -> Runpod; 0 GB local if remote." Good.
+
+Need maybe need "changes to the face" phrase exactly. Good.
+
+Need maybe need "quality risk" table. Good.
+
+Need maybe need "effort" table. Good.
+
+Need maybe need "VRAM" table. Good.
+
+Need maybe need "End with comparison table" final. Need maybe no text after table. Good.
+
+Need maybe need "Comparison table" heading before table? If heading is text before table, table can still be final. Need "End with a comparison table" maybe heading plus table is fine. Need maybe final line is table. Need maybe no trailing sentence. Good.
+
+Need maybe need "Do not choose one approach for the user." Need table neutral. Good.
+
+Need maybe need "Keep reply concise." Need maybe avoid too much explanation. Need maybe use compact bullets. Good.
+
+Need maybe need "First, state in 2-3 sentences..." Need final first paragraph 3 sentences. Need maybe "In `SAJ6O4sj.png`, ..." Good.
+
+Let's compose final answer carefully.
+
+Potential issue: "Only write code that edits existing images." Our hand-off prompt asks another model to return workflow JSON + glue code; not code that edits images? It's a prompt, not code. Fine. Need maybe not include any code that generates images from scratch. B/C workflow uses existing image. Need maybe mention "Use API-format inpaint workflow (VAEEncodeForInpaint on the uploaded target, not EmptyLatentImage/text-to-image)." Good.
+
+Need maybe "Do not generate images yourself" - no images. Need maybe "Do not generate images" in hand-off outputs. Good.
+
+Need maybe "Reference image: [image embed], Target image: [image embed]" user included images. Need no need to mention. Good.
+
+Need maybe "Target: SAJ6O4sj.png (chest looks too large; tank top clings...)" Need first paragraph. Good.
+
+Need maybe "Reference: maniol-anikawa-current_p2.png" in hand-off. Good.
+
+Need maybe "nearly flat/small chest" exactly. Good.
+
+Let's draft final response:
+
+```
+In `SAJ6O4sj.png`, reduce the bust silhouette to a nearly flat/small chest: pull the side/underbust contour inward and soften the cleavage/underbust shadow. The pink tank top should hang loosely from the shoulders instead of clinging, with straighter side seams/armholes and fewer underbust tension wrinkles. Replace those tension folds with soft vertical/diagonal drape folds while keeping face, hair, goggles, arms, gloves, belt, shorts, and workshop background unchanged.
+
+All snippets below read the existing target PNG and write a new PNG for optional pen-tablet cleanup.
+```
+
+Need first paragraph 3 sentences. Good. Second paragraph okay.
+
+Then approaches. Need maybe include "Approach A — ..." with description, libraries, code, params/risks/VRAM. Need maybe use compact bullet list. Need maybe "Libraries: `opencv-python`, `numpy`." Need maybe "Code:" then block. Then "Params / risks / VRAM:" with sub-bullets or one line. Need keep concise.
+
+Need maybe need "denoise" field for each. Need maybe "Adjustable: `strength` 0.10–0.25, `vertical` 0–0.15, `feather` 8–30 px, polygon `P`; `denoise`: N/A." Good.
+
+Need maybe "Risks: line-art distortion at neckline/armholes/side seams; color seams if feather too small; changes to the face unlikely if `P` stays below y≈0.27H, but collarbone/neckline can shift." Good.
+
+Need maybe "VRAM: 0 GB; CPU OpenCV, <1 GB RAM." Good.
+
+Need Approach B description: "Draw a tight mask over chest/tank area only (exclude face, arms, belt, background), feather it, upload to ComfyUI and run low-denoise img2img inpainting with the same checkpoint/LoRA. Prompt: loose tank top, flat chest; negative: tight/large chest. The workflow must be API-format inpaint..." Need maybe mention "Save as `comfy_inpaint.py`; C calls it." Need maybe "Libraries..." Need code. Need "Adjustable: strength=denoise 0.25-0.40, feather 4-12 px, grow_mask_by 4-10, cfg/steps/seed in workflow, POS/NEG." Need "Risks: ..." Need "VRAM: ..." Good.
+
+Need maybe "Code under 60 lines" yes. Need maybe "If `LoadImageMask` is unavailable, use a `LoadImage` alpha-mask workflow and change the class string." Need maybe include after code. Need maybe "first two CLIPTextEncode nodes in JSON order are positive/negative." Need maybe include. Good.
+
+Need Approach C description: "Auto-build mask from pink HSV + torso ROI, morph/dilate to include anti-aliased outlines, then call B's ComfyUI inpaint. Distinct from B because mask is automatic." Need code. Need "Libraries..." Need "Adjustable..." Need "Risks..." Need "VRAM..." Good.
+
+Need complex hand-off prompt. Need maybe after approach C:
+
+```
+A reference-guided ControlNet/IP-Adapter + segmentation retouch would need a full pipeline, so it is not designed here; per instruction 5, use this self-contained hand-off prompt for another model:
+
+> **Goal:** ... 
+> **Inputs:** ...
+> **Outputs:** ...
+> **Constraints:** ...
+> **Environment:** ...
+```
+
+Need maybe "Do not generate images; return workflow JSON and glue code only." Need maybe "No full pipeline design in this reply." Good. Need maybe "another model" explicitly. Good.
+
+Need maybe need "If an approach would need complex design... do not design it." Good. Need maybe "not designed here" explicit. Good.
+
+Need maybe table at end. Need maybe include "Comparison" heading. Need maybe final table. Need maybe no text after. Need maybe table includes 4 rows including complex hand-off. Need maybe "Approach" column includes D hand-off. Need maybe "Effort" etc. Need maybe "Quality risk" includes line-art/color seams/face changes maybe not all. Need maybe "VRAM" include values. Need maybe final row for D. Need maybe "D Reference-guided hand-off (not implemented)" with effort high, risk medium-high, VRAM 6-10 GB / Runpod. Good.
+
+Need maybe need "End with comparison table (approach, effort, quality risk, VRAM)" - table columns exactly those names. Need maybe lower-case? Use `Approach | Effort | Quality risk | VRAM`. Good. Need maybe final answer ends with table row. Good.
+
+Need maybe need "Keep reply concise" - table concise. Good.
+
+Need maybe need "Do not choose one approach" - no recommendation. Good.
+
+Need maybe need "No images" - no image markdown. Good.
+
+Need maybe need "Only write code that edits existing images." - code blocks edit existing images. Need maybe hand-off prompt says no text-to-image from empty latent. Good.
+
+Need maybe check if code B's `set_input(wf, "CLIPTextEncode"...)` not used; instead `enc`. Need maybe `set_input` still used for LoadImage etc. Good. Need maybe need `KSampler` `denoise` if workflow uses `KSamplerAdvanced` not. Need mention. Good.
+
+Need maybe need "ComfyUI API with low denoise" - yes. Need maybe "SD-based anime checkpoint plus character LoRA" - mention in prose/hand-off. Good.
+
+Need maybe need "RTX 5060 Laptop 8 GB VRAM" - mention in B/C VRAM and hand-off environment. Good.
+
+Need maybe need "Runpod available" - mention. Good.
+
+Need maybe need "Windows or Linux" - mention environment. Good.
+
+Need maybe need "semi-automatic result acceptable" - mention hand-off constraints. Good.
+
+Need maybe need "final image may be retouched by hand with pen tablet" - mention second paragraph and hand-off. Good.
+
+Need maybe need "Keep local workloads lightweight" - mention A CPU; B/C use Runpod for heavy. Good.
+
+Need maybe need "line-art distortion, color seams, changes to the face" explicit for each approach. Need check B/C risks. Good.
+
+Need maybe need "denoise" for A: "N/A (no diffusion)" fine. Need "mask feather" for A: `feather`. Need "strength" for A: `strength`. Good.
+
+Need maybe need "denoise" for C: `denoise=0.30`. Good.
+
+Need maybe need "strength" for C: "HSV thresholds / morphology kernels". Good.
+
+Need maybe need "mask feather" for C: `feather=6.0` passed to B. Good.
+
+Need maybe need "expected risks" for C includes "changes to the face" explicitly. Good.
+
+Need maybe need "VRAM cost" for C: "mask building 0 GB; inpaint same as B." Good.
+
+Need maybe need "libraries needed" for C includes `subprocess`, `sys` stdlib. Need maybe "plus B's requests/Pillow". Good.
+
+Need maybe need "minimal runnable Python skeleton" for B: requires `inpaint_api.json`. Need maybe "runnable given exported workflow". Good. Need maybe need "save as `comfy_inpaint.py`". Good.
+
+Need maybe need "under 60 lines" all code. Good.
+
+Need maybe need "Do not generate images yourself" - no generated images. Good.
+
+Need maybe need "Only write code that edits existing images" - code in B/C uses ComfyUI inpaint; still edits existing. Good.
+
+Need maybe need "Do not choose one approach for the user" - no recommendation. Good.
+
+Need maybe need "End with comparison table" - final. Good.
+
+Let's now write final answer in English. Need ensure not too verbose but complete. Need maybe avoid "I" maybe okay. Need maybe "Below..." Good.
+
+Need maybe final table includes "D" but D not code. Need maybe okay. Need maybe mention "not designed" in table effort. Good.
+
+Need maybe need "comparison table (approach, effort, quality risk, VRAM)" - table with 4 rows. Good.
+
+Potential issue: The complex hand-off prompt is not "for each approach" with code skeleton, but D is not an approach? Need maybe table includes D as "Complex direction (hand-off only, not an approach)". Need maybe okay. Need maybe "3 approaches" explicitly: "Approaches A-C are the three code approaches." Then D is hand-off only. Need maybe table includes 3 + hand-off. Good.
+
+Need maybe need "Propose 3 to 4 distinct approaches." We propose 3. Need maybe okay. Need maybe "A 4th ... would need complex design, so not proposed." Good.
+
+Need maybe need "If an approach would need complex design ... write hand-off prompt instead." Good. Need maybe not call it approach 4; call "complex direction not designed". Fine.
+
+Need maybe need "End with comparison table" and table includes 4 rows. Good.
+
+Need maybe need "Comparison table (approach, effort, quality risk, VRAM)" includes row for complex direction; user can decide. Good.
+
+Need maybe final answer. Let's craft with Markdown.
+
+Need ensure first paragraph exactly 3 sentences. Let's count:
+1. "In `SAJ6O4sj.png`, reduce the bust silhouette to a nearly flat/small chest: pull the side/underbust contour inward and soften the cleavage/underbust shadow."
+2. "The pink tank top should hang loosely from the shoulders instead of clinging, with straighter side seams/armholes and fewer underbust tension wrinkles."
+3. "Replace those tension folds with soft vertical/diagonal drape folds while keeping face, hair, goggles, arms, gloves, belt, shorts, and workshop background unchanged."
+Good. Then second paragraph "All snippets..." okay.
+
+Need maybe "Do not generate images yourself" no images. Good.
+
+Need maybe "Only write code that edits existing images." second paragraph. Good.
+
+Need maybe "semi-automatic result acceptable" mention "optional pen-tablet cleanup". Good.
+
+Let's write final. Need be careful with code block line counts; okay.
+
+Need maybe include "Libraries needed" for B: `requests`, `Pillow`; ComfyUI server with `inpaint_api.json`. Need mention "API-format workflow exported from ComfyUI containing `LoadImage`, `LoadImageMask`, `VAEEncodeForInpaint`, `KSampler`, `VAEDecode`, `SaveImage`, with checkpoint/LoRA already set; not `EmptyLatentImage`." Good. Need maybe "first two CLIPTextEncode nodes..." mention. Good.
+
+Need maybe "If `LoadImageMask` is unavailable..." optional. Need maybe include in prose after code. Good.
+
+Need maybe "Expected risks" for B includes "changes to the face". Good.
+
+Need maybe "VRAM cost" includes "0 GB local if Runpod". Good.
+
+Need maybe "Runpod" in C too. Good.
+
+Need maybe "hand-off prompt" in blockquote; need self-contained. Need maybe include "Environment: Python 3, Windows/Linux, ComfyUI, SD anime checkpoint + character LoRA, RTX 5060 Laptop 8 GB, Runpod for heavy steps." Good.
+
+Need maybe "Outputs: edited PNG(s), mask PNG, workflow JSON + glue code, parameter list; no rendered images in the reply." Good. Need maybe "Constraints: no text-to-image from empty latent; only warp/inpaint on existing target; expose denoise/feather/strength; keep local lightweight; preserve identity/background; semi-automatic OK; mitigate line-art distortion, color seams, face changes." Good. Good.
+
+Need maybe final table no trailing text. Good.
+
+Let's produce final answer.

@@ -1,0 +1,178 @@
+The target needs a smaller, nearly flat chest: reduce the outward bust silhouette and the apparent volume under the pink tank top. The tank top should read as hanging loosely from the shoulders, so underbust tension wrinkles should be softened/removed and replaced with calmer, mostly vertical drape folds.
+
+All snippets below load `SAJ6O4sj.png` and write an edited PNG; `maniol-anikawa-current_p2.png` is used only as a proportion guide. No snippet creates a new image from scratch. For ComfyUI snippets, `inpaint_workflow.json` is an exported masked-inpaint workflow using your SD anime checkpoint + character LoRA; edit `N` to its node IDs.
+
+### 1) Elliptical geometric warp of chest + tank top
+
+**Description:** Feathered inverse `cv2.remap` compresses chest width and slightly stretches the lower fabric.  
+**Libraries:** `opencv-python`, `numpy`.
+
+```python
+import cv2, numpy as np
+TARGET="SAJ6O4sj.png"; OUT="out_warp.png"
+CX,CY=0.50,0.41; RX,RY=0.18,0.16
+SHRINK=0.18; DRAPE=0.06; FEATHER=31
+im=cv2.imread(TARGET); h,w=im.shape[:2]
+y,x=np.mgrid[0:h,0:w].astype(np.float32)
+cx,cy=CX*w,CY*h; rx,ry=RX*w,RY*h
+r2=((x-cx)/rx)**2+((y-cy)/ry)**2
+wgt=np.exp(-2.5*r2).astype(np.float32)
+wgt=cv2.GaussianBlur(wgt,(FEATHER|1,FEATHER|1),0)
+map_x=x+SHRINK*wgt*(x-cx)                 # sample farther out => inward compression
+map_y=y-DRAPE*wgt*np.maximum(y-cy,0)      # lower fabric drapes downward
+warp=cv2.remap(im,map_x,map_y,cv2.INTER_LANCZOS4,borderMode=cv2.BORDER_REPLICATE)
+a=np.clip(wgt*1.6,0,1)[...,None]
+out=(im.astype(np.float32)*(1-a)+warp.astype(np.float32)*a).clip(0,255).astype(np.uint8)
+cv2.imwrite(OUT,out); print(OUT)
+```
+
+**Params:** strength `SHRINK`, `DRAPE`; mask feather `FEATHER`; denoise `N/A`; ROI `CX/CY/RX/RY`.  
+**Risks:** line-art distortion near armholes/side seams; color seams at ellipse edge; changes to the face: none if ellipse stays below chin/goggles.  
+**VRAM:** 0 GB, CPU only.
+
+### 2) Hand-painted mask + ComfyUI low-denoise inpaint
+
+**Description:** Feather a manual chest/tank mask, upload it to ComfyUI, and inpaint only that region with a “loose top” prompt.  
+**Libraries:** `requests`, `opencv-python`, stdlib; ComfyUI + exported workflow.
+
+```python
+import cv2, json, time, uuid, os, requests
+TARGET="SAJ6O4sj.png"; MASK="chest_mask.png"; MASK_F="mask_feathered.png"
+OUT="out_comfy.png"; URL="http://127.0.0.1:8188"; WF="inpaint_workflow.json"
+DENOISE=0.30; STEPS=20; CFG=6.5; SEED=1234; FEATHER=15
+PROMPT="flat small chest, loose pink tank top hanging from shoulders, soft vertical drape folds, no underbust tension wrinkles, same character, same face, same background"
+N={"img":"1","mask":"2","pos":"3","ks":"6"}   # edit to exported workflow IDs
+def feather():
+    m=cv2.imread(MASK,cv2.IMREAD_UNCHANGED)
+    if m is None: raise FileNotFoundError(MASK)
+    if m.ndim==3 and m.shape[2]==4: a=m[:,:,3]
+    elif m.ndim==3: a=cv2.cvtColor(m,cv2.COLOR_BGR2GRAY)
+    else: a=m
+    a=cv2.GaussianBlur(a,(FEATHER|1,FEATHER|1),0)
+    rgba=cv2.cvtColor(a,cv2.COLOR_GRAY2BGRA); rgba[:,:,3]=a
+    cv2.imwrite(MASK_F,rgba); return MASK_F
+def upload(p):
+    with open(p,"rb") as f:
+        r=requests.post(f"{URL}/upload/image",files={"image":(os.path.basename(p),f,"image/png")},data={"overwrite":"true","type":"input"}).json()
+    return (r.get("subfolder","")+"/"+r["name"]).lstrip("/")
+def run():
+    wf=json.load(open(WF))
+    wf[N["img"]]["inputs"]["image"]=upload(TARGET)
+    wf[N["mask"]]["inputs"]["image"]=upload(feather())
+    if "channel" in wf[N["mask"]]["inputs"]: wf[N["mask"]]["inputs"]["channel"]="alpha"
+    wf[N["pos"]]["inputs"]["text"]=PROMPT
+    wf[N["ks"]]["inputs"].update(denoise=DENOISE,steps=STEPS,cfg=CFG,seed=SEED)
+    cid=uuid.uuid4().hex
+    pid=requests.post(f"{URL}/prompt",json={"prompt":wf,"client_id":cid}).json()["prompt_id"]
+    for _ in range(180):
+        h=requests.get(f"{URL}/history/{pid}").json().get(pid)
+        if h:
+            for o in h["outputs"].values():
+                if "images" in o:
+                    info=o["images"][0]
+                    open(OUT,"wb").write(requests.get(f"{URL}/view",params=info).content)
+                    return OUT
+        time.sleep(1)
+    raise RuntimeError("ComfyUI timeout")
+print(run())
+```
+
+**Params:** strength `DENOISE` 0.25–0.40, `CFG`, `STEPS`; mask feather `FEATHER`; denoise `DENOISE`; `PROMPT`, `SEED`.  
+**Risks:** line-art drift; color seams at mask edge; changes to the face/identity if mask or denoise is too high; LoRA drift.  
+**VRAM:** SD1.5 about 3–5 GB; SDXL about 6–8 GB on the 8 GB RTX 5060; Runpod for SDXL/high-res.
+
+### 3) Automatic pink-top mask, then ComfyUI inpaint
+
+**Description:** HSV threshold + ROI + largest contour builds the mask from the pink tank top, feathers it, then calls the same inpaint API.  
+**Libraries:** `opencv-python`, `numpy`, `requests`, stdlib; ComfyUI workflow.
+
+```python
+import cv2, numpy as np, json, time, uuid, os, requests
+TARGET="SAJ6O4sj.png"; OUT="out_auto_mask.png"; MASK="auto_mask.png"
+URL="http://127.0.0.1:8188"; WF="inpaint_workflow.json"
+ROI=(0.30,0.27,0.68,0.58); LO=np.array([150,55,70],np.uint8); HI=np.array([179,255,255],np.uint8)
+FEATHER=15; DENOISE=0.30; STEPS=20; CFG=6.5; SEED=1234
+PROMPT="flat small chest, loose pink tank top hanging from shoulders, soft vertical drape folds, no underbust tension wrinkles, same face and background"
+N={"img":"1","mask":"2","pos":"3","ks":"6"}
+def mask():
+    im=cv2.imread(TARGET); h,w=im.shape[:2]
+    m=cv2.inRange(cv2.cvtColor(im,cv2.COLOR_BGR2HSV),LO,HI)
+    x0,y0,x1,y1=[int(v*(w if i%2==0 else h)) for i,v in enumerate(ROI)]
+    roi=np.zeros_like(m); roi[y0:y1,x0:x1]=255; m=cv2.bitwise_and(m,roi)
+    m=cv2.morphologyEx(m,cv2.MORPH_CLOSE,np.ones((7,7),np.uint8))
+    cs,_=cv2.findContours(m,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
+    if cs:
+        c=max(cs,key=cv2.contourArea); m[:]=0; cv2.drawContours(m,[c],-1,255,-1)
+    m=cv2.GaussianBlur(m,(FEATHER|1,FEATHER|1),0)
+    rgba=cv2.cvtColor(m,cv2.COLOR_GRAY2BGRA); rgba[:,:,3]=m
+    cv2.imwrite(MASK,rgba); return MASK
+def upload(p):
+    with open(p,"rb") as f:
+        r=requests.post(f"{URL}/upload/image",files={"image":(os.path.basename(p),f,"image/png")},data={"overwrite":"true","type":"input"}).json()
+    return (r.get("subfolder","")+"/"+r["name"]).lstrip("/")
+def run(mp):
+    wf=json.load(open(WF)); wf[N["img"]]["inputs"]["image"]=upload(TARGET)
+    wf[N["mask"]]["inputs"]["image"]=upload(mp)
+    if "channel" in wf[N["mask"]]["inputs"]: wf[N["mask"]]["inputs"]["channel"]="alpha"
+    wf[N["pos"]]["inputs"]["text"]=PROMPT
+    wf[N["ks"]]["inputs"].update(denoise=DENOISE,steps=STEPS,cfg=CFG,seed=SEED)
+    cid=uuid.uuid4().hex; pid=requests.post(f"{URL}/prompt",json={"prompt":wf,"client_id":cid}).json()["prompt_id"]
+    for _ in range(180):
+        r=requests.get(f"{URL}/history/{pid}").json().get(pid)
+        if r:
+            for o in r["outputs"].values():
+                if "images" in o:
+                    info=o["images"][0]; open(OUT,"wb").write(requests.get(f"{URL}/view",params=info).content); return OUT
+        time.sleep(1)
+    raise RuntimeError("timeout")
+print(run(mask()))
+```
+
+**Params:** strength `LO/HI`, `ROI`, `DENOISE`; mask feather `FEATHER`; denoise `DENOISE`; morph kernel 7×7.  
+**Risks:** line-art drift; color seams if HSV mask leaks to skin/gloves or misses dark folds; changes to the face if ROI reaches goggles/face; LoRA drift.  
+**VRAM:** 0 GB for mask creation + same as Approach 2.
+
+### 4) CPU-only fold/shading flatten
+
+**Description:** Erase dark tension-wrinkle strokes with `cv2.inpaint` and soften low-frequency shading inside a feathered chest ROI; silhouette is mostly unchanged.  
+**Libraries:** `opencv-python`, `numpy`.
+
+```python
+import cv2, numpy as np
+TARGET="SAJ6O4sj.png"; OUT="out_flatten.png"; WRINKLES=None
+ROI=(0.34,0.32,0.64,0.56); FLATTEN=0.55; FEATHER=21; INPAINT_R=3; DARK=18
+im=cv2.imread(TARGET); h,w=im.shape[:2]
+x0,y0,x1,y1=[int(v*(w if i%2==0 else h)) for i,v in enumerate(ROI)]
+roi=np.zeros((h,w),np.uint8); roi[y0:y1,x0:x1]=255
+wm=cv2.imread(WRINKLES,0) if WRINKLES else None
+if wm is not None: wm=cv2.resize(wm,(w,h))
+else:
+    g=cv2.cvtColor(im,cv2.COLOR_BGR2GRAY)
+    wm=cv2.inRange(cv2.subtract(cv2.GaussianBlur(g,(0,0),5),g),DARK,255)
+wm=cv2.bitwise_and(wm,roi)
+wm=cv2.morphologyEx(wm,cv2.MORPH_CLOSE,np.ones((3,3),np.uint8))
+base=cv2.inpaint(im,wm,INPAINT_R,cv2.INPAINT_TELEA)
+soft=cv2.GaussianBlur(base,(0,0),12).astype(np.float32)
+a=cv2.GaussianBlur(roi,(FEATHER|1,FEATHER|1),0).astype(np.float32)/255*FLATTEN
+out=(base.astype(np.float32)*(1-a[...,None])+soft*a[...,None]).clip(0,255).astype(np.uint8)
+cv2.imwrite(OUT,out); print(OUT)
+```
+
+**Params:** strength `FLATTEN`, `DARK`; mask feather `FEATHER`, `INPAINT_R`; denoise `N/A`; `ROI`.  
+**Risks:** line-art distortion, i.e. fold strokes erased; color seams at ROI feather; changes to the face: none with tight ROI; waxy fabric.  
+**VRAM:** 0 GB, CPU only.
+
+**Complex extension, not designed here — hand-off prompt for another model:**
+
+> **Goal:** Edit only `SAJ6O4sj.png` to reduce chest volume and make the pink tank top hang loosely from the shoulders, removing underbust tension wrinkles; use `maniol-anikawa-current_p2.png` only as a proportion reference.  
+> **Inputs:** `SAJ6O4sj.png`, `maniol-anikawa-current_p2.png`, optional hand-painted chest/tank mask, existing ComfyUI SD anime checkpoint + character LoRA.  
+> **Outputs:** edited PNG, final feathered mask, ComfyUI workflow JSON, parameter log; no new character image and no image generated from scratch.  
+> **Constraints:** preserve face, goggles, hair, elf ears, pose, background, belt, gloves, shorts, and colors; edit only the chest/tank-top ROI; keep line art; use low denoise; allow final pen-tablet retouch; do not design a full pipeline in this reply.  
+> **Environment:** Python on Windows/Linux, ComfyUI, local RTX 5060 Laptop 8 GB VRAM, Runpod for heavier segmentation/edge-guidance steps, lightweight CPU mask work locally.
+
+| Approach | Effort | Quality risk | VRAM |
+|---|---|---|---|
+| 1. Elliptical geometric warp | Low; tune 6 numbers | Medium-high: line-art shear, silhouette/color seams; face safe if ROI low | 0 GB |
+| 2. Manual mask + ComfyUI inpaint | Medium; paint mask, export workflow | Medium: line-art drift, mask-edge color seams, face/identity drift, LoRA drift | 3–5 GB SD1.5; 6–8 GB SDXL; Runpod for SDXL |
+| 3. Auto pink mask + ComfyUI inpaint | Medium; tune HSV/ROI | Medium-high: mask leaks, color seams, line-art/face drift if ROI too high | 0 GB mask + same as Approach 2 |
+| 4. CPU fold/shading flatten | Low; tune ROI/threshold | Medium: erased fold line art, waxy fabric, ROI color seams; face safe if ROI tight | 0 GB |

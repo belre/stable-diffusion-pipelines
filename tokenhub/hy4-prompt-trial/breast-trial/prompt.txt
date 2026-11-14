@@ -1,0 +1,16 @@
+Task: Propose several code approaches that reduce the chest size in an existing anime-style image. Do not generate images yourself. Only write code that edits existing images.
+
+Inputs:
+- Reference: maniol-anikawa-current_p2.png (target proportions: nearly flat/small chest, tank top hanging loosely from the shoulders)
+- Target: SAJ6O4sj.png (chest looks too large; the tank top clings to the chest and shows tension wrinkles from the underbust)
+
+Environment: Python, Windows or Linux, RTX 5060 Laptop with 8 GB VRAM. ComfyUI is used for generation (SD-based anime checkpoint plus a character LoRA). The final image may be retouched by hand with a pen tablet, so a semi-automatic result is acceptable. Keep local workloads lightweight. Runpod is available for heavier steps.
+
+Instructions:
+1. First, state in 2-3 sentences what needs to change visually in the target (chest volume, fabric fit, fold pattern) so that the code approaches have a clear goal.
+2. Propose 3 to 4 distinct approaches. For example: (a) local geometric warp of the chest and tank top region with a mask, (b) mask-based inpainting through the ComfyUI API with low denoise, (c) automatic mask creation from the pink tank top by color or segmentation, then inpainting, (d) any other lightweight approach you consider better.
+3. For each approach give: a short description, the libraries needed, a minimal runnable Python skeleton (under 60 lines), the adjustable parameters (strength, mask feather, denoise), the expected risks (line-art distortion, color seams, changes to the face), and the VRAM cost.
+4. Do not choose one approach for the user. End with a comparison table (approach, effort, quality risk, VRAM) so the user can decide.
+5. If an approach would need complex design (full pipeline or architecture), do not design it. Write a self-contained hand-off prompt (goal, inputs, outputs, constraints, environment) for another model instead.
+
+Reply in English only. Keep the reply concise. Do not generate images.
