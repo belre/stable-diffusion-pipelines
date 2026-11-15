@@ -1,0 +1,65 @@
+## 1. Under-mask content and location
+
+- **Numbering convention:** left-to-right by center: region1 = lower-left quadrilateral; region2 = diagonal pill; region3 = small bottom circle; region4 = right-edge vertical blob. Coordinates are approximate at 832×1216.
+- **Region1** — Lower-left, `x≈68–286, y≈894–1027` (74–84% down): **boundary mix**, mostly long light-cyan hair strands with sunlit lime grass, white daisies and tiny blue flowers at left. The wavy lower edge appears to graze the upper contour of the pink knee/thigh and the hair-over-skin occlusion.
+- **Region2** — Bottom center-left, `x≈380–510, y≈1068–1188`: **boundary mix** of the green bodice/dress edge, a narrow bright cyan-white hair strand or reflected gap, and the inner edge of the pink forearm. Very little clean background.
+- **Region3** — Bottom center-right, `x≈568–648, y≈1155–1216`, clipped by the canvas: likely a **forearm/skirt boundary mix**—pink skin at left and dark green/brown costume with a possible gold ornament or highlight at right. Mostly character, not forest.
+- **Region4** — Right edge, `x≈752–832, y≈923–1192`, clipped by the canvas: **boundary mix** of the long blue-cyan hair curtain over dark green skirt, with perhaps only a narrow dark foliage/bokeh sliver at the extreme right.
+
+## 2. Mask appropriateness
+
+- **Overall:** Not appropriate for a “background-only” inpaint. **None of the four regions is pure background**; region1 and possibly region4 contain small background slivers. If deliberate removal of character pieces is intended, the masks are usable as rough guides but need manual refinement.
+- **Region1:** Cuts through left hair and probably the hair/knee boundary; **too loose** into the meadow/flowers and **too tight/abrupt** along the lower skin-and-hair contour.
+- **Region2:** Cuts through dress, probable hair/highlight and forearm; **too loose** into intact anatomy/costume, while too narrow to provide coherent surrounding-background context.
+- **Region3:** Cuts through arm/costume; the clipped circle is **too tight** for a semantic fill and **too loose** if only a small highlight needed removing.
+- **Region4:** Cuts through right hair and skirt; the upper bulb is **too loose** into skirt, the lower section is **too tight** around hair, and the right-edge clip plus concave notch risks a seam.
+- The white edges are only lightly feathered; several remain too hard for a large background fill. The glowing overlay makes thin strands difficult to localize, so contents and boundaries are estimates with roughly **±10–20 px** uncertainty.
+
+## 3. Background content to fill each region
+
+- **Shared continuity:** warm dappled sunlight from the upper-left/upper-center, saturated yellow-lime grass, cool emerald/teal shadows, dark umber tree tones, off-white daisies with yellow centers, soft circular bokeh and smooth anime-background gradients. These descriptions assume the masks are first redrawn to exclude character.
+- **Region1:** Continue bright lime grass and scattered small daisies/blue wildflowers; use a darker teal-green shadow behind where the hair was. Keep sunlight from upper-left, **low-to-moderate blur, approximately 2–5 px**, with only nearby flower edges slightly sharper.
+- **Region2:** Use shaded mid/dark green undergrowth, a few blurred grass blades and one tiny off-white bokeh; avoid large flowers or strong highlights that would compete with the dress. Keep a cool cast shadow near the body and **moderate blur, 4–8 px**.
+- **Region3:** Deep emerald/teal grass shadow with sparse yellow-green leaf tips, a small warm sun patch and possibly one softly blurred white flower; **medium-to-strong blur, 5–10 px**, to match the darker lower-right area.
+- **Region4:** Dark teal forest/grass, diffuse umber vertical foliage rather than a hard new tree trunk, small yellow-green sun flecks and a few white bokeh/daisies. Preserve upper-left illumination and use **stronger background blur, 6–12 px**, consistent with the out-of-focus right side.
+
+## 4. Risks if character parts are removed
+
+- **Region1:** Breaks the long left-hair silhouette and individual strand continuity; can truncate hair over the knee or nick the thigh outline. Dappled highlights, blue rim light and hair cast shadows will no longer continue.
+- **Region2:** Can punch a hole through the bodice/forearm junction, lose the dress contour or a cyan hair strand, and create a missing anatomy edge. White reflections and cel-shading boundaries are likely to terminate abruptly.
+- **Region3:** Risks removing the forearm edge, skirt/belt contour or gold ornament; a bright generated flower/bokeh could be misread as a skin or fabric highlight.
+- **Region4:** Breaks the vertical right-hair curtain, cyan rim lighting and skirt occlusion, producing disconnected hair tips or a transparent-looking gap at the canvas edge.
+- **All regions:** Possible hard seams, scenery appearing in front of the character, mismatched line weight, color bleed, incorrect shadow direction and inconsistent depth of field.
+
+## 5. Candidate inpainting approaches for 8 GB VRAM
+
+- **ComfyUI SDXL inpaint, fp16 with a 768–1024 masked crop and tiled VAE:** stronger semantic flowers/bokeh and high resolution; **cons:** VRAM is tight and it may redraw character parts.
+- **ComfyUI SD1.5 inpaint on a 512–768 masked crop at low-to-moderate denoise:** fast, comfortable on 8 GB and preserves untouched pixels; **cons:** weaker detail and more generic foliage.
+- **LaMa/Big LaMa or cv2 Telea fill, followed by low-denoise SD1.5 img2img on the patch:** very low VRAM and good local texture continuation; **cons:** smearing or weak object invention over the larger masks.
+- **Pen-tablet clone/underpainting, then very low-denoise inpaint only to unify texture:** maximum control over hair, skin and dress contours; **cons:** labor-intensive and dependent on manual painting skill.
+- **Runpod-hosted SDXL/Flux inpainting, leaving the local 8 GB unused:** more headroom and potentially better background detail; **cons:** upload/workflow overhead, cost, and possible style mismatch with the original.
+
+## 6. Candidate prompt phrases
+
+- **Unranked positive candidates:**
+  - `sunlit anime forest meadow, saturated lime-green grass, dark teal shadows, blurred umber tree trunks`
+  - `small white daisies with warm yellow centers, tiny blue wildflowers, sparse natural leaf shapes`
+  - `soft circular bokeh, dappled sunlight from upper left, gentle warm rim light, cool green occlusion shadows`
+  - `smooth cel-painted anime background, shallow depth of field, airy summer atmosphere, soft gradients`
+  - `seamless continuation of nearby grass direction, flower scale and perspective`
+  - `background behind the character only, preserve existing hair, skin and dress silhouettes, clean anti-aliased transitions`
+- **Unranked negative candidates:**
+  - `person, girl, elf, face, eyes, hair, skin, arm, hand, fingers, dress, jewelry, belt`
+  - `extra limbs, duplicated limbs, broken silhouette, disconnected hair tips, random character outlines`
+  - `hard mask seam, halo, rectangular patch, color banding, abrupt transition, visible brush stroke`
+  - `oversized flowers, repeated daisy pattern, blown-out white blobs, lens flare, text, watermark, signature`
+  - `sharp foreground foliage, oversharpened line art, noisy grain, plastic texture, muddy smears`
+  - `inconsistent light direction, mismatched focus, dark rectangular smudge, floating petals on skin or clothing`
+
+## 7. Recommended mask preprocessing
+
+- Values are at native **832×1216** resolution; scale by about 1.25× for 1024×1536 processing. They assume a **manually refined, background-only mask**; applying grow directly to the raw blobs will erase more character. For intentional character deletion, use grow `4–8 px` / feather `6–10 px` globally and expect pen-tablet contour reconstruction.
+- **Region1:** First shrink `8–12 px` away from hair and knee; then **grow `2–4 px` on the background side only**, **feather `3–5 px`**.
+- **Region2:** First shrink `10–14 px` away from dress/arm; then **grow `1–2 px` into background only**, **feather `2–4 px`**.
+- **Region3:** First shrink `6–10 px` away from forearm/costume; then **grow `2–3 px`**, **feather `3–5 px`**; pad `8–12 px` beyond the bottom edge to avoid a clipped-mask seam.
+- **Region4:** First shrink `8–12 px` away from hair/skirt; then **grow `3–5 px`**, **feather `6–9 px`**; pad `8–12 px` beyond the right edge for the softer, more blurred background.

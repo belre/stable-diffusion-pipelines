@@ -1,0 +1,420 @@
+We need answer English, bullet lists, one section per number, concise, analyze only, no images. Need inspect attachments carefully, identify 4 mask regions region1..4. Need infer numbering likely mask blobs perhaps region1 top-left white quadrilateral, region2 center small diagonal oval, region3 lower center small round blob, region4 right tall shape. Need map to original overlay and exact under-mask content/locations. Need carefully use image dimensions 832x1216 (shown likely exact). Need coordinates approximate perhaps x,y and relative location. Need identify what's under each of four masks using overlay and original.
+
+Let's parse images. Original dimensions 832x1216 portrait. Mask overlay pale glowing blobs show darkened image with luminous patches:
+- Region bottom left around x~65-285, y~895-1025? White quadrilateral from mask image at approx x 68-286, y 895-1028 perhaps. In overlay it spans from x~90? Need account display. It is over lower-left long cyan hair and maybe grass/flowers, near knee/shoulder? Let's inspect.
+- Region central diagonal oval around x 380-510, y 1068-1188? Actually mask image white oval at bottom center from x 381 to 511, y 1068? Need coordinate scaling. Image displayed 832x1216; mask image visually same. White oval center ~445,1125, rotated ~45° down-right. In overlay this glow appears around lower center around x 380-510 y~1070-1180, crossing cyan hair and maybe green dress/white sparkle? Need map.
+- Region lower middle round blob around x 568-648, y 1154? Actually mask image shows white circular blob near x ~570-650, y~1155 to bottom (1216), maybe clipped at bottom. In overlay, glow around lower right-ish x ~570-650, y 1150-1216, over forearm? Need map.
+- Region right tall curved vertical blob around x 752-832, y 923-1190? In overlay appears right edge from y~925 to 1190, crossing cyan hair at right and maybe dark green dress/brown belt? Need map.
+
+Need understand exact shapes and numbering. likely according to maybe left-to-right, top-to-bottom? User says region1..4 but no explicit numbering. We need define our assumed numbering. Could use "Region 1 (lower-left quadrilateral)" etc and state numbering. Need perhaps identify order based on mask detection components. There are 4 connected components:
+A lower-left quadrilateral at x~68-286 y~894-1026.
+B center diagonal capsule x~380-510 y~1068-1187.
+C lower-center round x~568-648 y~1156-1216 (perhaps touches bottom; visible white oval from y1157 to image bottom; maybe actually circle around x607 y1193 radius40, clipped)
+D right tall vertical shape x~752-832 y~923-1190, clipped at right edge.
+Could number by scan order (topmost first maybe A y894, D y923, B y1069, C y1156) or left-to-right? Typical region numbering could be connected components sorted top-to-bottom or perhaps given externally. Need choose and explicitly label. Since user requests region1..4 likely expects us to assign likely masks. Maybe mask blobs from original overlay can infer regions perhaps region1 lower-left, region2 central diagonal, region3 lower round, region4 right vertical. Most intuitive left-to-right: region1 lower-left large quadrilateral, region2 central diagonal pill, region3 lower-center circle, region4 right vertical. This is likely intended. Let's use that and state coordinate ranges to avoid ambiguity. Need identify what's under mask precisely.
+
+Let's deeply inspect original and overlay. We can potentially reconstruct pixel-space from embedded visual. Need zoom mentally. Use the original depiction:
+
+Image 832x1216:
+Character is elf seated. Long cyan hair flowing down left and right. Green strapless dress. Left? her right arm (on viewer right) extends downward from shoulder at x~590,y600 to x~460?, y1216? Actually arm is a large pink shape from x~510 to 770? Let's map.
+
+Original:
+- Head occupies x~80-680, y~0-600.
+- Torso from x~250-770, y~580-1100.
+- Left side long hair down x~90-290, y~500-1050, ending around y~1020.
+- Right side hair down x~600-832, y~500-1216.
+- Knee/skin large pale shape bottom left from x~0-450, y~1020-1216.
+- Green dress central x~305-515, y~875-1150.
+- Right forearm perhaps x~455-770, y~780-1216: starts shoulder around x~650, y620, goes down to x~600? Actually visible skin from shoulder x~500? Let's identify.
+
+Original lower half:
+At y~600, white-ish upper chest from x250 to 510; neck necklace at x410; shoulder/arm on right (viewer right) from x510? to 770? The big skin-colored vertical region from x500 to 770 perhaps shoulder and upper arm, tapering to forearm at x460-610 bottom. Specifically right shoulder rounded from x~510,y600 to x~770,y900. Then arm descends diagonally left from x~665,y900 to x~460,y1216. Green dress/skirt on right from x600,y895 to x810,y1216. The cyan hair overlays all along right edge down to bottom.
+- There is a thin white triangular highlight or gap between green bodice and arm? At bottom central around x400-470, y1100-1200, perhaps cyan hair and white clothing.
+
+Need locate masks:
+A lower-left quadrilateral x68-286, y894-1026. Original there: left-side cyan hair strands from x100-260, with bright yellow-green grass and white flowers behind. Also perhaps the top edge of pale pink knee emerging around y1020 at x0-150? The quadrilateral at y894-1026 sits just above knee; likely mostly long cyan hair and grass/flowers. Overlay glow visible as broad horizontal patch around x90-285,y895-1025, and underlying shows cyan hair vertical streaks, with maybe white flower around x80,y930 and grass. At lower boundary around y1025, pink knee begins from x0 to x~150 and cyan hair to x~250. So A's bottom edge may cross hair-to-knee boundary slightly and perhaps skin at left/bottom. Need examine overlay shown: lower-left glowing blobs: The bright quadrilateral begins at around (110,900), extends to (285,895? maybe), lower edge wavy around (68,1026)-(270,1020). In the overlay, within region we see pale cyan hair vertical strands from around x120 to x270, and a white flower around x80,y935? There is a yellow-green background wedge to left of hair around x70-120 perhaps. At bottom edge, maybe yellow grass and left hair; a red/pink curved knee outline starts around x0,y1020 and crosses into region around x70-150,y1027? The mask's bottom edge might just touch skin edge. Need mention boundary mix. This likely is one of regions that cuts through character hair. Maybe intended to remove an artifact in hair? User wants replace masked regions with plausible background—perhaps these were "bad spots" from SD output? Need report whether mask appropriate. We need flag cuts through character vs pure background. Need identify each.
+
+B center diagonal oval x380-510 y1068-1185. Original there: likely cyan/white hair tail? The overlay bright diagonal blob from x380,y1070 to x510,y1185 appears over what? In original that spot likely a white/cyan streak between dress and arm, maybe background/white flower? Let's inspect original at bottom center:
+At y~1075, green bodice from x307-510; lower right edge perhaps x500. There is a bright cyan/white diagonal shape emerging from x405,y1100 to x470,y1160, likely a long lock of hair or reflected highlight on dress? Then pink arm starts around x455,y? The overlay dark image shows glowing diagonal white blob centered ~445,1125; inside we can see maybe cyan/white diagonal line along lower right? Need infer from original: There is a visible turquoise/cyan narrow shape beginning around x402,y1135 (a triangular bright stripe between bodice and arm) going to x466,y1180, then maybe edge of cyan hair. Could be background visible through gap between torso and arm? Wait.
+
+Let's zoom by using textual pixel impression from displayed image. The original at bottom:
+- A green dress/bodice with pointed white lace top at y870, from x307 to x515. Its lower part extends to maybe x510,y1130.
+- A white/cyan triangular wedge at x402-470,y1090-1175 between green dress and her arm? This could be a fold/background gap.
+- A broad skin arm occupies x455-620 from y850 downward to bottom; yes.
+- At bottom central near y1160, there is a bright cyan diagonal strip from x395 to x470, likely hair? Could be a lens flare or "white shine" on skin/dress.
+- The mask B oval likely deliberately covers this bright triangular cyan artifact near the lower center of green dress/arm boundary. It may cut both dress and arm/cyan hair, not pure background. Need classify carefully.
+
+Maybe the masks correspond to "pale glowing blobs" intentionally placed over artifacts caused by an overlay? Could be four corrupted areas from an image generated by SD that user wants inpaint with background. Need inspect what's under each mask from original: perhaps they cover "white flowers" that need replacement? Actually the task: "I want to replace the masked regions of an anime illustration ... with plausible background (forest, grass, white flowers, soft bokeh). Inspect the attachments and report." So likely masks are regions mistakenly applied to character parts, and need assess if appropriate. Four masks along lower perimeter perhaps intended to remove extra limbs/hair? Maybe generated image had weird duplicated legs or artifacts, and masks selected around them. Need identify under-mask content.
+
+Let's use dimensions from visual more accurately. We can reconstruct coordinates using proportions from the supplied image encoded in prompt. The image is displayed at 832x1216 likely exact. I can inspect via mental eye from rendered markdown. Could perhaps emulate zoom by reasoning or invoking no tools? We have no image tool, but can use visual displayed. Need maybe use browser-like internal visual abilities—the model can parse image. Let's systematically map each glowing blob to original visible details.
+
+Attachment 2 (mask shown as pale glowing blobs) is darkened original with glowing blobs, likely black overlay with alpha plus white shapes. Need compare:
+- lower-left broad blob: from x~90 to 285, y~895 to 1025. It is bright white/cyan. Inside visible cyan hair strands and maybe a white daisy at lower? Specifically I see pale cyan vertical streaks in the blob from x~110 to x~270. The blob cuts sharply through long hair on left, likely clipping several strands at top and bottom. Outside below the blob, at x~0-150,y1020+, is pale pink knee. At x~150-280,y1020+, cyan hair continues down? Actually original left hair tapers to x~120-280 at y~1020 and then ends; knee overlaps at x0-160. So the blob's lower edge crosses hair and maybe skin boundary.
+- central diagonal blob: from x~380 to 510, y~1068 to 1187. In overlay, I see it as a bright white capsule tilted down-right. Under it maybe mostly pink arm/skin? Wait the blob itself in dark overlay appears a very bright white shape with a cyan diagonal strip at lower edge? Looking at screenshot: under center around y~1120, there's a white oval glow from x380 to 510. At its lower right near x460-500,y1160 maybe cyan hair glean. The original there includes a white/cyan sliver between green dress and pink arm, and likely the arm covers much of it. Need determine.
+- lower-center round blob: x~570-648,y1155-1216, a white circle mostly clipped bottom. In overlay, I can see a small bright round spot just right of center at bottom around x605,y1185; it might sit on pink forearm/skin. Original at that location likely pink arm (a large skin area) or dark green skirt? Let's map arm boundaries.
+- right tall blob: x~752-832,y923-1190. In overlay, bright cyan/white vertical shape along right edge starting y~925; inside visible cyan hair streaks and perhaps dark green skirt. Original there is definitely long cyan hair along right border, over dark green skirt/forest. The mask likely cuts through hair and dress.
+
+Maybe all four masks are placed over unwanted "bright lens flare" artifacts from a previous edit? The task specifically wants plausible background, so likely user wants to remove "masked regions" which might currently be character overlays (maybe extra duplicated arm/hair) and fill with background. Need flag that these masks cut character. We should be conservative and say all four are boundary mixes / character-heavy except maybe small pieces of background. Need precise per region.
+
+Let's identify structure lower right:
+Original right edge from y~600 down:
+- cyan hair strand starts around x650,y580 and extends diagonally to x832,y900, then vertically down x780-832 to bottom.
+- a green off-shoulder/skirt fabric region from x620,y900 to x800,y1150.
+- dark brown belt/ornament x600-780,y1120-1216.
+- cyan hair at far right x780-832,y900-1216.
+- pink arm from x460,y850? to x650,y1216? Let's perhaps sketch from visible image:
+The large skin region on viewer right: shoulder begins at x510,y600 and extends to x770,y900. Outer boundary (right side) is around x770 from y800-900; then green sleeve/dress starts at y900, horizontal-ish. Inner/left boundary from x510,y700? to x460,y1216. Thus at y1150, skin arm likely x460-620, green skirt x620-780, hair x780-832. Therefore round mask at x570-650,y1155-1216 straddles forearm and green skirt/belt/cyan hair. Diagonal oval x380-510,y1068-1185 straddles green bodice (x307-510 at y1068), narrow white/cyan gap, and left edge of skin arm (x460+). Right tall mask x752-832,y923-1190 straddles green skirt and cyan hair, possibly background at extreme right. Lower-left mask x68-286,y894-1026 straddles forest/grass/flowers, cyan hair, and top of knee.
+
+Need perhaps look at shape of arm from original: At y~900, shoulder skin from x510 to 770. At y~1000, arm maybe x470 to 680. At y~1100, arm maybe x460 to 620. At y~1216, arm maybe x455 to 570? Actually perspective: elbow around x680,y900? Forearm descends down-left to x460,y1216. So yes.
+
+Thus:
+- Region 2 (diagonal oval) may primarily cover the inner forearm/skin and a bright cyan/white hair/glint wedge, plus edge of green bodice. Need say "boundary mix: green dress edge, thin cyan hair/white highlight, and skin/forearm; very little actual background." Is that plausible? Need inspect overlay: The central diagonal glowing oval at x380-510,y1070-1185 seems centered over a bright white triangular highlight visible in original around x405-470,y1100-1180. That highlight is probably hair (a long cyan lock from chest? The central front lock ends around y860 with blue gem, not bottom). Could be a white flower or cloth. Wait original has a thin cyan hair strand from right side of head down to chest ending near pendant at y780. Then another long cyan strand from right shoulder down along back to bottom right. At bottom center, cyan diagonal strip may be a strand of that long hair crossing behind arm. Could be background or a white shine on skin.
+
+Let's zoom conceptually from original visual: At lower center around (430,1130), I see a bright white triangular shape with cyan edges, likely part of a "white flower" on grass visible through gap between arm and torso? The green bodice ends around (405,1140) with a diagonal edge; skin arm begins around (455,1150); between them is a turquoise/white region from (405,1130) to (468,1190). This might actually be background (bright grass/bokeh) visible in the triangular gap between bent arm and torso, and could be intended to be background. If so mask B covers a gap that is already plausible background plus boundaries. But task says replace masked regions with background. Maybe user masked "white glow artifacts" on character and wants background, perhaps requiring removing portions of character? Need not overcomplicate; report boundary mix and risks.
+
+Could use known anime composition: Character sitting with knee drawn up, arm resting on knee? The white/cyan wedge at bottom center between dress and arm might be a long turquoise hair lock. Looking at original: there is a thin cyan hair strand from the back/right hair falling diagonally across the gap, ending near bottom edge around x450,y1175. Could be hair. Indeed long right-side hair has a strand running from x~650,y550 down-left to x~450,y1180, visible as thin cyan line against skin/dress. So likely region 2 covers a cyan hair strand/highlight and adjacent dress/skin. Need mention.
+
+Maybe these four masks correspond to specific undesired "white glows" from an inpainting model, and need to be replaced with forest background around character. Need identify current under-mask from dark overlay:
+- Region 1 glow is broad quadrilateral over cyan hair and grass.
+- Region 2 glow is diagonal capsule over a bright cyan/white strip between green dress and arm.
+- Region 3 glow is small round over light pink forearm or a bright highlight.
+- Region 4 glow is tall narrow over cyan hair at right.
+Thus all are character-heavy. The user asks "Is the mask appropriate? Flag regions where it cuts through the character (hair/body/dress) vs. pure background"—clearly likely answer: no, masks cut character; need refine. Need say estimated mask may be slightly imprecise. We need note edges too tight/loose.
+
+Let's derive approximate coordinates from mask:
+A polygon: top-left around (115,894), top-right (285,894), then right edge slants left to (267,1013), bottom wavy to (68,1026), left edge to (115,894). So ~x68-286, y894-1027. It's a quadrilateral with slightly feathered edges perhaps.
+B capsule: rotated +45? from (380,1070) to (510,1188), width ~60. bounding x380-510,y1068-1188.
+C circle/oval: x568-648,y1155-1216, likely bottom clipped. center (607,1190), radius 40, only top ~60 px visible. Mask image shows a white circle from y1155 to bottom 1216, indeed clipped at bottom. Could be a full circle center (607,1190), r40; bottom at1230 clipped. So x568-648,y1155-1216.
+D right vertical shape: x752-832,y923-1192, clipped right edge, with bulbous top at x752,y945 and notch around y990, then narrower vertical to bottom. likely full irregular shape extending beyond right boundary. bounding x752-832,y923-1191. It touches right edge from y924 to? Wait mask image white shape appears from x752,y923 to x832,y? and vertical down to y1190; right side clipped by image. At y923 there is a white horizontal cap from x790 to832; shape curves left to x752 at y970; then around x775,y1000 there is a concavity; lower portion from x780,y1000 to832,y1190. So yes.
+
+Need perhaps use percentage locations:
+R1 lower-left, ~8-34% width, 74-84% height.
+R2 bottom center-left, ~46-61% width, 88-98% height.
+R3 bottom center-right, ~68-78% width, 95-100% height.
+R4 right edge, ~90-100% width, 76-98% height.
+
+That's clear.
+
+Need section 1: For each mask, "what is currently under mask (hair, skin, clothing, background, boundary mix), and approximate location." We'll state:
+- R1: mostly vertical cyan hair strands + bright yellow-green grass/white daisies at left; bottom edge grazes pale skin of raised knee/thigh and hair/knee boundary. It is a boundary mix, perhaps roughly 60-70% hair, 20-30% grass, small skin at lower edge. Need avoid overconfidence; say "visually, mostly ...; lower edge may just graze..." because estimated mask slightly imprecise.
+- R2: green bodice/dress edge, a narrow bright cyan/white hair/highlight wedge, and pink forearm/skin; likely very little pure background. Maybe classify boundary mix. Need determine if central diagonal shape maybe mostly background? Let's inspect overlay dark image: The oval glow starts around x380,y1070. At that coordinate original likely green dress (x307-510,y870-1130), so upper-left half is definitely green dress. Lower-right around x470-510,y1150-1185 likely pink arm. The bright cyan thin strip maybe hair. Thus it cuts through dress and arm, not pure background. Good.
+- R3: pink forearm/skin plus dark green skirt or brown/gold belt edge? Need map. At x568-648,y1155-1216, likely skin forearm and maybe dark green/dark brown costume/hair. Need look at original lower right around (607,1185): I see a golden/black ornament at bottom around x610, y1180, perhaps on dark belt. The pink arm likely extends to x570 at bottom, so x568-648 might be split: left part pink arm, right part dark green skirt/belt, with a golden decorative motif. Actually original at bottom around x600 (near edge) shows a gold triangular pattern on dark teal/brown fabric, around x610-675,y1170. There is also the arm's right edge maybe x600. So R3 likely straddles forearm edge and dark green skirt/belt + gold ornament, with a bright white highlight on skin. Need be precise:
+Original bottom right: large pink forearm ends off bottom around x455-600? Dark green skirt occupies x600-780. At far bottom around x600 there is a gold/black decorative trim. The small round mask around x607,y1190 likely specifically covers a white circular highlight on the dark skirt/belt or arm? Overlay bright small white blob around x605,y1180 is visible; in original maybe a lens/bokeh spot on dark green fabric. Could be pure clothing. We should say "primarily dark green skirt/belt and possibly the right edge of the pink forearm; includes a small gold ornament/highlight; no pure background." Need hedge.
+- R4: mostly long cyan hair over dark green skirt at right edge, with a narrow strip of dark forest background/bokeh at extreme right perhaps. It cuts through hair and clothing. Need mention boundary mix.
+
+Could perhaps derive from overlay more directly: In darkened overlay, right tall glowing blob shows cyan hair strands clearly (vertical bright blue lines), and to its left dark green skirt; so yes hair. At top y925, it may cover green fabric and hair. At bottom y1190, cyan hair. Good.
+
+R1 over left hair and grass/flowers, likely also knee skin at bottom.
+
+Need section 2: Mask appropriate? Flag regions cuts through character vs pure background, tight/loose edges, estimated imprecision. Need concise bullets perhaps:
+- Overall: not appropriate for "background-only" inpaint. All four intersect character; no region is pure background. If intent is to erase selected character parts (extra hair/dress etc.), it could be a deliberate removal mask, but then boundaries need manual cleanup and reconstruction.
+- R1: cuts long left hair and possibly knee silhouette; lower-left loose into grass/flowers; upper/right too tight around hair; bottom edge too close to skin/hair boundary. Need say grow/feather? Section 7 handles.
+- R2: cuts dress and arm/hair wedge; too tight/loose? The oval is too broad/loose relative to any pure-background gap; edges terminate inside smooth green fabric and skin, likely visible seam. Need perhaps say too tight around selected artifact? "too loose for a background fill: extends into intact dress and arm; too tight to include a coherent surrounding context." Need precise terms.
+- R3: cuts arm/skirt/gold detail; circular mask at image bottom is clipped, causing no context below and high seam risk; too tight around a local highlight if trying to preserve surrounding texture, too loose if background-only.
+- R4: cuts long cyan hair and green skirt; clipped at right edge; top bulb too loose into skirt, lower edge too tight against hair, with abrupt concave notch. Need note mask is hard-edged and needs feather; maybe edges already somewhat blurred. Mask image shows white shapes with slightly soft edges (a few px feather). Need mention "current edges are only lightly feathered; grow/feather needed." Also "estimated mask may be slightly imprecise" exactly requested. Say coordinates/content are estimates due glow overlay and thin strands.
+- "pure background": perhaps small slivers in R1 and R4 only; no fully pure background component. Need explicitly flag.
+
+Need section 3: For each, describe background content to fill (colors, objects, light direction, depth of field, blur level) matching surroundings. Need consider that filling masks that overlap character with background would create holes in character unless mask intentionally removes character pieces. We should describe plausible background continuation:
+General visual: sunlit forest, dark brown tree trunks in upper background, yellow-green grass, white daisies with orange/yellow centers, small blue/white flowers, cyan/teal shaded foliage, soft bokeh. Light likely from upper left / upper center? Need inspect original: bright backdrop at upper left around x150-300, with sun patches on hair and grass; tree trunks dark at x0-100 and x520-720. Highlights on left side of face and hair? Face has bright white dappled highlights on central chest and arms; light seems from upper left/upper-center (backlight). The grass at lower left is bright yellow-green, with dark green shadows at upper left and right. White flowers sharp-ish in foreground, bokeh soft in midground. We can say "warm sunlight from upper-left/upper-center, cool teal shadows to right, dappled highlights." Need maybe avoid asserting exact direction; "matching visible upper-left/upper-center daylight." Depth of field: nearby grass/daisies moderately soft, distant forest/tree trunks strongly blurred; hair-edge antialiasing sharp. Need per-region:
+- R1: continue bright yellow-lime meadow with small white daisies at lower left and a few tiny blue flowers; dark teal-green shadow behind hair on upper/right; soft vertical dark brown tree/bokeh at far left maybe. Light from upper-left, mild-to-moderate blur (background behind hair) with crisp small flower only if near boundary; avoid duplicating a large flower. Since at lower-left near foreground grass, blur level low-to-medium (2-5 px), soft bokeh patches. Need mention if preserving character, only fill background gaps outside hair, not replace hair.
+- R2: likely near torso/arm gap; should be shaded emerald/teal forest floor and slim grass blades, perhaps one tiny white daisy/bokeh, more occluded/cool shadow from body; soft medium blur 4-8 px; no bright white blooms that compete with dress. But if region entirely over body, background should not be inserted—reconstruct body instead. Yet task asks background content. Could say "If you really remove all character under the mask, fill with dark-to-mid green grass, cool teal shadow, small soft bokeh; moderate blur; maintain light from upper-left. However, this will read as a hole unless body edges are rebuilt." Need not duplicate risk section too much.
+- R3: bottom center-right near skirt/arm: likely dark green shaded grass/undergrowth, maybe dark brown trunk edge or belt? Need background continuation from right-side background: deep emerald/teal shadow, a few yellow-green leaf blades and small white daisies/soft white bokeh, warm rim from upper-left; stronger bokeh/5-10 px because lower/right background appears darker and out of focus. If at extreme foreground maybe moderate. Need match dark area around dress/hair.
+- R4: right edge: dark teal-green forest shade, vertical dark brown tree trunk or blurred foliage, yellow-green leaf highlights, small white daisy/bokeh; light from upper-left with warm yellow-green patches; moderate-to-strong blur 6-12 px, because right background behind hair/skirt is out of focus. Need perhaps preserve vertical alignment of tree trunk around x700 y0-500 that extends to y~470 only; right side background behind hair has dark green foliage and white flowers around y400-700. At y900-1200, likely dark green skirt/hair, not visible forest. But plausible background could be dark grass/leaf shapes. Need note no hard tree edge unless aligns with upper trunk.
+
+Need perhaps mention consistent color palette: saturated lime (#aad? no need hex maybe), teal shadows, off-white daisies, orange centers, amber sun patches, dark umber trunks. Light direction: upper-left/upper-center, slight backlighting; soft edge glow. Depth of field: moderate background blur; foreground flowers slightly sharper only near lower-left. We can distribute.
+
+Need section 4: Risks if character parts under mask are removed:
+- R1: breaks long left hair silhouette/individual strands and continuity, removes hair over knee, creates abrupt truncation; may cut knee/thigh outline, causing missing skin edge and inconsistent occlusion/shadow; dappled highlights/rim light on hair and knee won't continue; newly filled flowers may appear in front of where hair should be.
+- R2: removes green bodice edge, white lace/highlight, cyan front hair strand or gap, and left forearm outline; creates hole through torso/arm, loss of anatomy and cast shadow, mismatch in bright dappled lighting; necklace/hair strand maybe not directly here but adjacent.
+- R3: removes forearm skin edge or skirt/belt/gold ornament; broken body silhouette, missing costume detail, inconsistent occluding foreground/background; bright bokeh may be mistaken for a highlight on skin/fabric; rim/shadow mismatch.
+- R4: removes long right hair curtain and maybe skirt edge, breaks vertical hair strands/outlines and cyan rim light; produces transparent gap at image edge, inconsistent occlusion with dark skirt, loss of cast shadow/blue rim, duplicated/terminated strands at mask boundary.
+General: hard seam, changed line weight/anime cel shading, color bleed, inconsistent focus; the background may appear in front of foreground character. Need concise. Need maybe mention "if the intent is to erase these character pieces, reconstruct adjacent contours manually first." Good.
+
+Need section 5: 3-5 candidate inpainting approaches fitting 8 GB VRAM, one line each pros/cons. Need no full pipeline design; only one line each. Examples:
+- ComfyUI SDXL inpainting at 768–1024 px / tiled or latent upsample, mask grow+blur, low-to-moderate denoise 0.35-0.55: semantic continuity, good bokeh; 8 GB tight, may alter character and needs `--medvram`/tiling.
+- ComfyUI SD1.5 inpaint model with 512–768 inpaint crop + masked composite/upscale: fast, low VRAM, preserves original outside mask; weaker fine detail/style and may create generic foliage.
+- LaMa / Big LaMa or OpenCV Telea first, then low-denoise SD1.5 img2img only on patch: excellent texture continuation and low VRAM; weak at inventing semantic flowers/bokeh, leaves smears over large masks.
+- ControlNet / IP-Adapter? Could use reference/segmentation? Need maybe candidate approach that fits 8GB: "Patch-based SD1.5/SDXL inpaint with a hand-painted background underlay + low denoise" preserves silhouette. But shouldn't design full pipeline. User specifically gives examples. We can list 4:
+  1. SDXL inpaint in ComfyUI (fp16, 1024 crop, tiled/medvram) pros rich background, cons VRAM tight, can redraw character.
+  2. SD1.5 inpaint in ComfyUI with 512-768 crop, low denoise pros efficient/style match, cons lower resolution/less detail.
+  3. LaMa/cv2 Telea then low-denoise img2img on mask pros low VRAM and seamless local textures, cons poor large semantic structures/smearing.
+  4. Manual pen-tablet underpainting/clone-stamp in Krita/Photoshop then very low-denoise SD inpaint/ComfyUI to unify pros exact preservation of hair/body edges, cons labor and depends on artist.
+  5. Runpod SDXL/Flux? 8GB local constraint, Runpod available; "Runpod SDXL/Flux inpaint at higher VRAM" pros high quality, cons cost/upload and style mismatch. Need fit 8 GB? Since Runpod available, can use remote high VRAM, but asked approaches that fit 8GB VRAM perhaps include remote alternative. Better say "Runpod-hosted SDXL/Flux fill (offloads local 8GB)" pros quality, cons workflow/cost. But maybe not needed. Need 3-5; 4 is enough. Include environment note? They asked no full pipelines. One line each with pros/cons. We can mention ComfyUI/models and approximate settings; no pipeline design. Need not choose among them. Use one line each.
+
+Need section 6: candidate positive/negative prompt phrases as bullet list; do not choose among them; user will decide. Need list phrases perhaps separate "Positive candidates" and "Negative candidates", all bullet list. They said "List candidate positive/negative prompt phrases ... as a bullet list. Do NOT choose among them; I will decide." Need avoid selecting. Could list candidate phrases individually with labels [positive]/[negative]. Need no recommendation. Need mention no ranking. Should include style and content:
+Positive:
+- "sunlit anime forest background, vibrant yellow-green grass, white daisies, tiny blue wildflowers, dark teal foliage"
+- "soft bokeh, dappled sunlight from upper left, warm amber highlights, cool green shadows"
+- "blurred dark brown tree trunks, depth of field, painterly anime cel background, smooth gradients"
+- "seamless continuation of existing grass and flower scale, no character, no hard edges" (but "no character" as positive maybe phrase weird; negative prompts needed)
+- "small white flowers with yellow centers, natural perspective, subtle rim light, airy atmosphere"
+- "background only, preserve existing character outline/hair/skin/clothing" maybe important.
+- "soft-focus meadow behind foreground subject, shallow depth of field, anime background painting"
+Negative:
+- "person, girl, elf, face, eyes, hair, skin, arm, hand, fingers, dress, clothing, anatomy"
+- "extra limbs, duplicated limbs, hands, distorted body, broken silhouette, stray hair strands"
+- "hard mask boundary, seam, halo, outline, patch, color banding, abrupt transition, clipping"
+- "oversaturated white blobs, blown-out highlights, lens flare, large flower, text, watermark, signature"
+- "sharp foreground detail, oversharpened lines, noisy texture, plastic skin, jewelry, belt, ornament"
+- "dark rectangular smudge, smeared grass, repeated flowers, inconsistent light direction, mismatched depth of field"
+Need perhaps phrase "hair" in negative could conflict with preserving character edges: inpaint model only sees masked area but context includes hair; negative "hair" may help prevent generating hair inside the mask. Yet if need fill around hair, no character is good. We can include candidate, user chooses.
+- "character outline, new hair strand, disconnected hair tips, random white petals on skin" etc.
+Need not choose. Maybe use two sub-bullets "Positive candidates" and "Negative candidates", each with nested bullet list. Output format "bullet lists". Fine. Need avoid adding "Recommended prompt" or choices. We can say "Unranked candidates:".
+
+Need section 7: Recommended mask preprocessing (grow px, feather px) per region. Need be careful: If mask cuts through character and user wants pure background, growing would worsen. Need recommend split masks / manual refinement rather than just grow. But asked per region grow and feather. We should provide numerical values based on 832x1216 resolution. Need think about inpainting needs. We can recommend minimal or even negative grow (shrink) for character-heavy masks to preserve character. Need phrase:
+- First refine manually to background-only polygons, excluding hair/skin/dress; then apply small grow/feather to catch antialiasing, not necessarily grow current masks. If using current masks as-is, no grow (or shrink) because all cross character. Need give per region numbers.
+Could recommend:
+  - R1: shrink/redraw 8–12 px away from hair/knee and then grow 2–4 px into background only, feather 4–6 px. But section asks "grow px, feather px per region." Could list "Current mask: grow 0 px (better: shrink 8–12 px / redraw); feather 3–5 px." Need perhaps include exact.
+  - R2: current mask: grow 0 px, shrink 10–16 px or redraw; feather 2–4 px. If character parts are intentionally to be removed, grow 4–6 px and feather 6–8 px to avoid halos, but that deletes more character. Hmm.
+  - R3: grow 0–2 px, feather 3–5 px; shrink 6–10 px from arm/skirt if preserving.
+  - R4: grow 0–2 px, feather 5–8 px; shrink 8–12 px away from hair/skirt; right-edge clip needs extend past canvas? Inpainting masks at image boundary can be handled; growing clipped at edge doesn't hurt. Need perhaps use 6-10 px feather for broad blurred background.
+Need decide how to interpret expected answer. The user likely expects practical mask preprocessing values: e.g., region1 grow 4-6px, feather 3-5px; region2 grow 2-4px, feather 2-3px; region3 grow 3-5px, feather 4-6px; region4 grow 5-8px, feather 6-10px. They may not expect us to challenge mask and suggest shrinking. But section 2 asks mask appropriateness. We can offer values for two modes: "For preservation mode (recommended after refining background-only)" and "for deliberate removal mode." Yet asked concise. Need include hand-off prompt if something needs complex design? They say "No design of full pipelines; if something needs complex design, output a self-contained hand-off prompt instead (goal, inputs, outputs, constraints, environment)." We don't need complex design; numerical preprocessing is okay. Could avoid complex pipeline.
+
+Need understand intent more: "I want to replace the masked regions ... with plausible background." Maybe they purposely want to remove some character parts under masks (perhaps extra stray hair/limbs) and fill with background. They ask "For each ... what is currently under mask (hair, skin, clothing, background, boundary mix)"; "Is mask appropriate? Flag regions where it cuts through the character (hair/body/dress) vs. pure background"; "Risks if character parts under mask are removed." This strongly suggests they want an audit of whether masks accidentally cover character. So likely answer should say no, refine masks to pure background or intentionally retouch. Therefore recommending "no grow" on unrefined masks is sensible. But maybe we can provide both "after manual refinement, grow/feather". Need not overcomplicate but can be explicit:
+"Values below are for inpainting the current mask. Because all regions overlap the character, first manually redraw to the background-only portions; then use the listed small grow/feather. If deliberately deleting character, use the alternate larger values and expect manual reconstruction." Yet section 7 asks per region; we can list both in one line each.
+
+Let's perhaps set a clear convention:
+- "Grow/feather values are for a refined background-only mask at native 832×1216, not for the raw blobs. If using raw blobs, grow=0/shrink is safer; extra grow will erase more character."
+Then per region:
+  - R1: grow 3-5 px, feather 4-6 px; manually shrink 8-12 px away from hair/knee. Maybe grow around antialiased hair edge? Actually if inpainting background adjacent to hair, we often grow mask 2-4 px *into the unwanted object* to remove halo. But if hair is to be preserved, growing into hair is bad. A refined mask can be grown only on background side using directional expansion, but generic grow would encroach hair. Need word "directional grow 2-4 px into background only."
+  - R2: grow 1-3 px, feather 2-4 px; shrink 8-14 px from dress/arm.
+  - R3: grow 2-4 px, feather 3-5 px; shrink 6-10 px from arm/costume; because clipped at bottom, extend mask 8-12 px beyond canvas or pad.
+  - R4: grow 3-6 px, feather 6-8 px; shrink 8-12 px from hair/skirt; pad right edge 8-12 px.
+Could also provide "If intentionally removing all character under masks": grow 4-8 px, feather 6-10 px, but then hand-repaint contours. Maybe one general note.
+
+Need perhaps use 832x1216 native resolution values; if upscaled to 1024/1536 in ComfyUI, scale by ~1.25; mention values are native px. Good.
+
+Need perhaps section numbering with headings "1. Under-mask content and location" etc, and bullet lists. Need keep concise but enough detail. Need no images generation. Need answer in English. Need not mention no image generation.
+
+Need perhaps include "I number regions left-to-right across lower image." This helps. Need maybe do that before section 1 or inside. Use first bullet maybe "Numbering: ...". The user says answer in order, one section per number. We can put assumption under section 1. Need no preamble maybe.
+
+Let's ensure all 4 regions correctly mapped. Could there be a different numbering expected based on scan order? Let's consider possibility that region1..4 are identified by mask components from some tool sorted by area or y coordinate:
+- If sorted by area descending: R1 largest, R4 second, R2 third, R3 smallest. That's actually left-to-right order too! Nice:
+  A large quadrilateral area ~30k px².
+  D tall right ~8k px².
+  B oval ~8k px² perhaps similar.
+  C circle ~5k.
+Could be region labels from left-to-right likely A, B, C, D. If top-to-bottom: A (y894), D (y923), B (y1068), C (y1155). But user might have grouped by visual region labels in some known detector. There are no visible numeric labels. Need state our numbering explicitly. If their intended numbering differs, coordinate descriptors resolve. Maybe use both coordinates and names. Could perhaps avoid assuming by labeling each bullet with location and call region1 etc according to left-to-right. Good.
+
+Let's more deeply inspect original to improve content identification. I'll mentally zoom each region based on visible rendered image:
+R1: In original, lower left at y900: from x0 to120 grass bright lime with white daisies around x40,y940? Actually there is a large white daisy at x40,y715 maybe. At y900, there are white flowers x65,y930 and x120,y? The cyan hair begins x120 and extends to x280. The mask A top edge y895 crosses hair around x120-280 and grass at x115-? At bottom y1025, there is a pink knee boundary from x0,y1020 to x150,y1025; cyan hair behind from x120-270. So yes.
+R2: Original at y1070: green bodice from x307 to~490; bright cyan/white diagonal strip from x405,y1120 to x470,y1190; pink arm from x455 to620. The oval x380-510 covers all. There is also perhaps background visible through a small triangular gap between bodice and arm at x400-470,y1130-1180. Need mention "possibly a sliver of background/gap." Could say "boundary mix: green dress, a narrow cyan/white strand/highlight or small background gap, and pink forearm." This acknowledges uncertainty. Good.
+R3: Original at x570-648,y1155-1216: likely skin forearm ends near x570? The visible bottom of image around center-right: there is a pink arm from x455,y900 to x570,y1216; dark green skirt/black belt from x590 to780; a gold ornament at x610,y1180. Thus small circular mask centered x607,y1190 may cover mostly dark green/brown belt/gold motif, perhaps right edge of forearm. Need say "mainly dark green skirt/brown belt and gold ornamental detail, with possible slim pink forearm edge at left; no clear pure background." But maybe the arm extends to x650, making it mostly forearm. Let's parse original visible: At bottom edge, from left to right: pink knee from x0-~370; pink forearm from x~455-~600? dark belt/skirt from x600-780; cyan hair from x780-832. There is a bright turquoise triangular wedge around x400-470. A gold pattern near x610-670 at y1175. So yes roughly split. Use "straddles the forearm/skirt boundary, and may include a gold/brown costume accent." Good.
+R4: x752-832,y923-1190: green skirt from x620-780, cyan hair from x780-832. So at left edge of mask x752 perhaps dark green skirt, at right hair. Mostly long cyan hair along right edge plus dark green skirt; possibly tiny dark forest sliver. Say "boundary mix: cyan hair curtain over dark green skirt; almost no visible pure background." Good.
+
+Could R1 and R4 be masks intentionally targeting long hair to remove it? R1 quadrilaterally crops a chunk of left hair; R4 tall shape targets right hair; perhaps they want to erase hair from bottom to show more background. R2 and R3 target arm/dress bits. Maybe the user wants to remove foreground character altogether from these areas? If so all masks are character removal masks, and background replacement would require contour reconstruction. Need say "If the goal is to delete these hair/costume fragments deliberately, mask is roughly aligned but edges are too coarse; if goal is background-only retouch, inappropriate." Good nuance.
+
+Let's consider section 3 likely expected per region background content:
+- R1 (lower-left): bright grass and daisies.
+- R2 (lower center): perhaps dark grass/bokeh gap between body and arm.
+- R3 (lower center-right): dark grass/bokeh and maybe flowers.
+- R4 (right edge): dark forest, bokeh, green grass.
+Need specify light and blur. We can mention "Do not introduce tree trunks that don't line up." For R1, maybe a vertical dark brown tree trunk at far left could align with upper left trunk, but at bottom left there's grass so not necessary. R4, a dark brown vertical tree trunk could align with trunk at x700,y0-460? Actually right background at x700 has a dark tree trunk from y0 to y470, then grass from y470 down; at y900 there may be no trunk. So avoid a hard vertical trunk to prevent inconsistent perspective. Use diffuse brown/teal vertical bokeh only.
+
+Need section 5 details with 8GB VRAM:
+- SDXL inpaint on RTX 5060 Laptop 8GB may be feasible at 1024² with fp16 and attention optimizations/tiled VAE; we should say "feasible but tight." ComfyUI has `--medvram` maybe not applicable? ComfyUI uses model offloading automatically. Use "fp16, 768–1024 crop, tiled VAE." Fine.
+- SD1.5 inpaint at 512–768 crop. Need perhaps mention "masked crop, not full 832x1216." Good.
+- LaMa/cv2 (CPU/GPU) + low-denoise SD1.5 img2img. Fits easily. Cons.
+- Manual pen-tablet underpaint + low denoise, no VRAM concerns. Fine.
+- Runpod high-VRAM SDXL/Flux inpaint optional. Since user mentions Runpod available, include it. But they ask approaches that fit 8GB VRAM; Runpod bypasses local constraint. Could phrase "Runpod SDXL/Flux inpainting (remote; local 8 GB irrelevant)" as candidate. Pros/cons. Need maybe not choose. 5 lines okay.
+Need avoid full pipeline design; each line one approach with pros/cons, no steps. We can mention "one line each". Good.
+
+Need section 6 prompt phrases perhaps include "positive:" and "negative:" as nested bullets. They asked "Do NOT choose among them; I will decide." We can say "Unranked phrase bank (mix as desired):" but that almost instructs mix; okay. Need not choose. Keep all as candidates. Maybe 10 positive and 8 negative is too much? "concise" suggests 5 positive, 5 negative. Let's do 6 each perhaps. Need include both style and background specifics. Could use one bullet per phrase with `[Positive]` / `[Negative]` tags. That's a bullet list, no selection. Use 10 bullets total. Fine.
+Potential positive phrases:
+1. "sunlit anime forest meadow, saturated lime-green grass, dark teal shadows, blurred umber tree trunks"
+2. "small white daisies with warm yellow centers, tiny blue wildflowers, sparse leaf shapes, natural scale"
+3. "soft circular bokeh, dappled sunlight from upper left, gentle warm rim light, cool green occlusion shadows"
+4. "smooth cel-painted background gradients, shallow depth of field, airy summer atmosphere, no hard line art"
+5. "seamless continuation of nearby grass/flower direction and perspective, background behind the character only"
+6. "preserve existing character silhouette, hair strands, skin and dress edges, clean anti-aliased transitions"
+Need perhaps "no hard line art" as positive? Could be okay.
+Negative phrases:
+1. "person, girl, elf, face, eyes, hair, skin, arms, hands, fingers, dress, jewelry, belt"
+2. "extra limbs, duplicated limbs, broken silhouette, disconnected hair tips, random character outlines"
+3. "hard mask seam, halo, rectangular patch, color banding, abrupt edge, visible brush stroke"
+4. "oversized flowers, repeated daisy pattern, blown-out white blobs, lens flare, text, watermark, signature"
+5. "sharp foreground foliage, oversharpened line art, noisy grain, plastic texture, muddy smears"
+6. "inconsistent light direction, mismatched focus, dark rectangular smudge, floating petals on skin/clothing"
+Need no selection.
+
+Need section 7 refinements. Let's think carefully about numerical values and semantics. Maybe user expects "grow 2-4px, feather 3-5px" based on mask edge. Need provide per region and contextual note:
+"Values are at native 832×1216; scale ~1.25× if processing at 1024×1536. Values assume you have first redrawn the mask to exclude character; applying grow to raw blobs will worsen character cuts." Then bullets:
+- R1: "Redraw/shrink 8–12 px off hair and knee; directional grow 3–5 px into background; feather 4–6 px." But user asked grow px and feather px; include both clear numbers. Maybe "Grow: 3–5 px (background side only; 0 px on current blob / shrink 8–12 px first). Feather: 4–6 px."
+- R2: "Grow: 1–3 px (background side only; 0 px raw / shrink 10–14 px); Feather: 2–4 px." Since small narrow region, less feather.
+- R3: "Grow: 2–4 px; Feather: 3–5 px; shrink 6–10 px from arm/costume; pad bottom 8–12 px." 
+- R4: "Grow: 3–6 px; Feather: 6–8 px; shrink 8–12 px from hair/skirt; pad right 8–12 px."
+Need maybe a "deliberate removal mode" note: "If intentionally erasing character under the raw masks, use grow 4–8 px / feather 6–10 px globally, but expect manual contour repaint." Could be general note after bullets. Is giving both too complex? Not full pipeline. Fine.
+
+Maybe region1 should have larger feather 6-8 because broad background; region4 8-12 due blurred forest; R3 4-6; R2 3-5. Need choose based on local blur:
+- R1 lower-left grass/flowers are moderately sharp; feather 3-5.
+- R2 near character edges; feather 2-3.
+- R3 near dark skirt/arm; feather 3-5.
+- R4 strongly blurred hair/background; feather 6-10.
+Grow values reflect antialias: 2-4, 1-2, 2-3, 3-5.
+Let's use those.
+
+Need perhaps mention "grow" around mask for inpainting usually includes 2-8px of context to remove halos; feather 3-8px. For hard anime edges, too much feather causes bleed. Good.
+
+Need maybe include "mask edge currently has a few px softness but too hard for large fills." in section 2. Fine.
+
+Need use "estimated mask may be slightly imprecise" explicitly. Could say "The pale overlay and masked composite make thin strands difficult to localize; contents/coordinates are estimates ±10–20 px." This satisfies. User says "Note the estimated mask may be slightly imprecise." Maybe they want us to note that caveat. We'll state in section 2: "All coordinates and contents are estimates; the glow overlay can shift perceived boundaries by ~10–20 px." Good.
+
+Need perhaps mention attachment dimensions 832x1216; no need verify but use native px.
+
+Let's produce a balanced answer with exactly 7 sections, bullet lists. Need ensure output format English. Need no design of full pipelines. No full pipeline design beyond approach lines. Need perhaps no hand-off prompt because no complex design needed. Good.
+
+Let's outline final:
+
+### 1. Under-mask content and location
+- "Numbering assumed left-to-right..."
+- R1 ...
+- R2 ...
+- R3 ...
+- R4 ...
+
+Need maybe include approximate x,y ranges in parentheses, not too much. Use percentages maybe. Let's include both approximate pixel bbox and relative location for clarity. E.g. "(x≈68–286, y≈894–1027; lower-left, 74–84% down)". Good.
+
+### 2. Mask appropriateness
+- Overall no; all four cross character. No pure-background region; only narrow background slivers R1/R4. If intentional deletion, rough but coarse.
+- R1 ...
+- R2 ...
+- R3 ...
+- R4 ...
+- "Edges: lightly softened but too hard; etc; estimate ±10–20 px."
+
+Need maybe "too tight/loose" explicitly per each:
+R1 "too loose over grass, too tight/abrupt at hair/knee."
+R2 "too loose into dress/arm, but too tight to include enough background context."
+R3 "too loose for local highlight/clipped; too tight for semantic fill." 
+R4 "top bulb too loose into skirt; lower edge too tight around hair; right clipping."
+Need careful phrase "too tight/loose" not ambiguous. Good.
+
+### 3. Background fill per region
+General note perhaps one bullet: "Use warm upper-left/upper-center light, cool teal shadows..." Then 4 bullets with specifics. Need per region though. Could include light direction in each perhaps.
+R1: bright yellow-lime grass etc, low-medium blur 2-5 px.
+R2: dark/mid green undergrowth in cool cast shadow, tiny soft bokeh, medium blur 4-8 px; no large flowers.
+R3: deep emerald/teal shade, sparse yellow-green blades, one small off-white bokeh/daisy, darker warm rim, medium-strong blur 5-10 px.
+R4: dark teal forest/grass, diffuse umber vertical forms, yellow-green highlights and small white daisies/bokeh, moderate-strong blur 6-12 px. Need preserve upper-left light. Need avoid a hard tree trunk that doesn't align. Good.
+Could mention "If preserving character, these fills apply only to background gaps; body portions should be reconstructed, not filled with scenery." Might be a global note. Fine.
+
+### 4. Risks
+General plus each region. Need 4 bullets maybe enough. Include hair silhouette, missing limb/body outline, shadow/rim mismatch. Good.
+
+### 5. Approaches
+One bullet each with pros/cons. 5 bullets. Need no selection. Could mention 8GB fit. Good.
+
+### 6. Prompt phrases
+One bullet list with [Positive]/[Negative] tags. Need not choose. Could have subheadings? "Positive candidates" and "Negative candidates" are not bullet? We can make bullets with nested bullets. Better:
+- Positive candidates:
+  - ...
+- Negative candidates:
+  - ...
+But then top-level bullet list plus nested. Fine. Need "Do NOT choose among them" so no ranking. Include "Unranked." Good.
+
+### 7. Recommended mask preprocessing
+Note with native px and scale. 4 bullets. Need perhaps mention raw masks not to grow. General note:
+- "Assumption: values apply after a manual background-only redraw; on raw blobs use grow 0/shrink first because all overlap character." Is this a bullet? Yes.
+Then 4 bullets with grow/feather. Need perhaps section 7 asks per region; this note okay.
+Need perhaps include alternative deliberate removal mode. Maybe last bullet: "If intentionally deleting character: raw masks grow 4–8px, feather 6–10px globally, then hand-repaint all silhouettes." But that would be a fifth bullet not per region. Could include in header note. Need keep concise. Maybe phrase in note: "For intentional character deletion instead, use grow 4–8 / feather 6–10 globally and expect hand repaint." That's not pipeline design, just values. Good.
+
+Need ensure no full pipelines. Fine.
+
+Let's revisit content under masks one more time to avoid major mistake. Could use visual coordinate mapping from mask overlay to original:
+Attachment 2 dark overlay shows bright glows:
+- lower-left blob around x90-285,y895-1025: I can see vertical cyan hair lines inside and maybe no skin.
+- diagonal blob centered x445,y1128: in dark overlay maybe simply a bright white patch on dark green dress? Actually original at that location has a bright white triangular reflection across green dress? Looking at original near bottom center: There is a white/cyan triangular shape from x400,y1100 to x470,y1160. Could be a bright reflection on skin? The mask overlay glow likely corresponds exactly to that shape. Underlay perhaps pink arm and green dress boundary. Our boundary mix remains safe.
+- round blob x607,y1185: original shows gold ornament on dark belt? The overlay glow at bottom around x605,y1180 appears over dark green/brown area, perhaps with a small golden detail. Our description captures.
+- right blob x780,y1000-1190: cyan hair strands. Good.
+
+Maybe region3 is pure skin (forearm) and region2 pure skin/background. Need hedge with "likely" and "boundary mix." Good.
+
+Need perhaps include percentages of content? "mostly" etc. Good.
+
+Let's think about mask appropriateness phrasing: If all four are character-heavy, perhaps "not appropriate if the goal is to replace only background" is key. If goal is to remove character, then "intentional removal mask could be appropriate, but edges need refinement." Good.
+
+Need perhaps mention "mask edges too tight around hair means visible halo; too loose means erasing character." Good.
+
+Need perhaps mention "estimated mask may be slightly imprecise" as caveat. Good.
+
+Need perhaps mention "soft bokeh" and "depth of field" consistently. Good.
+
+Let's write final in concise but detailed style. Need maybe use em dash. Ensure no images. Need no preamble. Need headings "1." etc. Good.
+
+Let's formulate section 1 carefully:
+
+"Numbering: left-to-right by center (R1 lower-left quad, R2 diagonal pill, R3 round bottom blob, R4 right-edge vertical blob); bounds at native resolution."
+
+R1:
+- "lower-left, x≈68–286,y≈894–1027: boundary mix—mostly vertical light-cyan hair strands, with sunlit lime grass/white daisies/blue flowers at left; wavy lower edge grazes the top contour of pale pink knee/thigh and hair occlusion."
+Could be "the pale pink knee starts around y1020" yes.
+
+R2:
+- "bottom center-left, x≈380–510,y≈1068–1188: boundary mix—green strapless dress/bodice edge, a narrow bright cyan/white hair strand or reflected gap, and the inner edge of the pink forearm; almost no clean background." Fine.
+
+R3:
+- "bottom center-right, x≈568–648,y≈1155–1216, clipped by bottom: boundary mix—pink forearm edge and dark green skirt/brown belt with gold ornament/highlight; likely mostly costume/skin, not forest." Fine.
+
+R4:
+- "right edge, x≈752–832,y≈923–1192, clipped right: boundary mix—long blue-cyan hair curtain over dark green skirt, with only a narrow possible dark foliage/bokeh strip at extreme edge." Fine.
+
+Need perhaps "white flowers" under R1 maybe yes.
+
+Section 2:
+- "Not appropriate for pure background. None of four are pure background; only R1 and maybe R4 contain slivers. If goal is deliberate removal, they are coarse and need hand refinement."
+- R1: "cuts hair and knee boundary; too loose into meadow, lower edge too tight/abrupt against skin/hair."
+- R2: "cuts dress, possible hair, arm; too broad/loose into intact anatomy, and too tight to include coherent background context."
+- R3: "cuts arm/costume; circular bottom clip too tight for context and too loose for local highlight; likely seam."
+- R4: "cuts hair/skirt; upper bulb too loose into skirt, lower/narrow section too tight on hair, right edge clipped; abrupt notch."
+- "Current edges only lightly feathered; glow overlay makes boundaries estimated, ±10–20 px." Good.
+
+Section 3:
+Need perhaps note "Assume masks have been redrawn to background-only. If not, fill will look like holes." Good.
+- General "Palette: lime/teal etc; light upper-left/upper-center." Could make first bullet "Shared continuity..." but user says for each region; can include general note plus each. Fine.
+R1 specifics.
+R2 specifics.
+R3 specifics.
+R4 specifics.
+
+Need perhaps include "blur level" numeric in px at native resolution? Better use qualitative plus approximate equivalent blur radius:
+- low–moderate 2–4 px
+- moderate 4–8 px
+- medium 5–9 px
+- strong 6–12 px
+This is useful. But inpainting model won't literally blur by px; still description. Good.
+Need "light direction" in each: upper-left/upper-center. Maybe say "keep warm dappled highlights entering from upper-left/upper-center" each. Avoid repetition by general note then per region mention shadow. Fine.
+
+Section 4:
+- R1 etc. Could also include overall line about mismatch. Need 4 bullets perhaps enough.
+
+Section 5:
+Need maybe "SDXL inpaint" on 8GB with 768-1024 crop. Use "masked crop" not full image.
+- "ComfyUI SDXL inpaint, fp16 + tiled VAE on a 768–1024 crop — pros...; cons..." one line.
+- "ComfyUI SD1.5 inpaint, 512–768 masked crop, low denoise — pros...; cons..."
+- "LaMa/Big LaMa or cv2 Telea fill, then low-denoise SD1.5 img2img over patch — pros...; cons..."
+- "Pen-tablet clone/underpaint, then very low-denoise inpaint only to unify texture — pros...; cons..."
+- "Runpod SDXL/Flux inpaint offloaded — pros...; cons..." Need maybe all approaches fit 8GB: Runpod remote technically local 8GB irrelevant. Say "local 8GB untouched". Good.
+Need one line each with pros/cons. Fine.
+
+Section 6:
+Unranked phrase bank. Need no selection. Use positive/negative nested bullets. Fine.
+
+Section 7:
+Need perhaps note "native px; scale with processing resolution." "Values assume refined background-only masks; raw masks should first be shrunk/excluded." Then per region.
+R1 grow 2-4, feather 3-5, shrink 8-12.
+R2 grow 1-2, feather 2-4, shrink 10-14.
+R3 grow 2-3, feather 3-5, shrink 6-10; pad bottom 8-12.
+R4 grow 3-5, feather 6-9, shrink 8-12; pad right 8-12.
+Need include "grow background-side only" each. Good.
+Alternative deletion mode note: "For intentional deletion of character, raw masks can use grow 4-8 / feather 6-10 globally, but hand repaint contours." Put in general note. Need maybe not add complexity. Good.
+
+Let's consider if "shrink" values are recommended mask preprocessing despite asked grow/feather. We can clearly label. If a user wants to use current masks as-is, they may interpret grow 2-4 and feather 3-5. But our note says raw masks should be shrunk first. Good.
+
+Need maybe include "estimated mask may be slightly imprecise" in section 2. Yes.
+
+Need perhaps mention "pen tablet final retouch" in section 5. Good.
+
+Need no "hand-off prompt" because no complex pipeline design. Fine.
+
+Let's ensure answer "concise" not overly verbose. We can keep bullets 1-2 sentences each. Total maybe ~1500 words? Need aim 1000-1200. Current outline perhaps 1300. Fine.
+
+Let's draft final now.

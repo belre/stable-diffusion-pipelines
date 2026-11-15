@@ -1,0 +1,15 @@
+## Prompt
+
+Do not generate images. Analyze only.
+Task: I want to replace the masked regions of an anime illustration (832x1216, SD/ComfyUI output) with plausible background (forest, grass, white flowers, soft bokeh). Inspect the attachments and report.
+Please answer in this order, concisely:
+1. For each of the 4 mask regions (region1..4): what is currently under the mask (hair, skin, clothing, background, boundary mix), and approximate location.
+2. Is the mask appropriate? Flag regions where it cuts through the character (hair/body/dress) vs. pure background, and any mask edges that look too tight/loose. Note the estimated mask may be slightly imprecise.
+3. For each region, describe what background content should fill it (colors, objects, light direction, depth of field, blur level) so it matches the surroundings.
+4. Risks if the character parts under the mask are removed (e.g. hair silhouette breaks, missing limb/body outline, shadow/rim light mismatch).
+5. List 3-5 candidate inpainting approaches that fit 8 GB VRAM (e.g. ComfyUI SDXL/SD1.5 inpaint with mask grow+blur, Lama/cv2 inpaint then low-denoise img2img, manual pen-tablet touch-up). One line each with pros/cons.
+6. List candidate positive/negative prompt phrases for the inpaint step as a bullet list. Do NOT choose among them; I will decide.
+7. Recommended mask preprocessing (grow px, feather px) per region.
+Output format: English, bullet lists, one section per number above. No design of full pipelines; if something needs complex design, output a self-contained hand-off prompt instead (goal, inputs, outputs, constraints, environment).
+Environment: ComfyUI, RTX 5060 Laptop 8 GB VRAM, final retouch by pen tablet, Runpod available.
+
