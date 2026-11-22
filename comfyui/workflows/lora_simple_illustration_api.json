@@ -16,7 +16,7 @@
     },
     "class_type": "EmptyLatentImage",
     "_meta": {
-      "title": "Empty Latent Image"
+      "title": "空の潜在画像"
     }
   },
   "6": {
@@ -29,7 +29,7 @@
     },
     "class_type": "CLIPTextEncode",
     "_meta": {
-      "title": "Positive Prompt"
+      "title": "CLIPテキストエンコード（プロンプト）"
     }
   },
   "7": {
@@ -42,7 +42,7 @@
     },
     "class_type": "CLIPTextEncode",
     "_meta": {
-      "title": "Negative Prompt"
+      "title": "CLIPテキストエンコード（プロンプト）"
     }
   },
   "10": {
@@ -50,7 +50,7 @@
       "add_noise": "enable",
       "noise_seed": 280377238955987,
       "steps": 25,
-      "cfg": 8.0,
+      "cfg": 8,
       "sampler_name": "euler",
       "scheduler": "normal",
       "start_at_step": 0,
@@ -91,7 +91,7 @@
     },
     "class_type": "VAEDecode",
     "_meta": {
-      "title": "VAE Decode"
+      "title": "VAEデコード"
     }
   },
   "19": {
@@ -104,7 +104,7 @@
     },
     "class_type": "SaveImage",
     "_meta": {
-      "title": "Save Image"
+      "title": "画像を保存"
     }
   },
   "54": {
@@ -123,7 +123,7 @@
     },
     "class_type": "LoraLoader",
     "_meta": {
-      "title": "Load LoRA"
+      "title": "LoRAを読み込む"
     }
   }
 }
