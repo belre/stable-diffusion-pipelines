@@ -1,0 +1,25 @@
+# SDXL 正方形（1024x1024）プリセット
+# null の項目はワークフロー JSON 側の元設定をそのまま使用します。
+
+checkpoint: null
+vae: null
+
+width: 1024
+height: 1024
+batch_size: 1
+
+steps: 28
+cfg: 7.0
+sampler_name: euler_ancestral
+scheduler: normal
+denoise: 1.0
+
+lora:
+  name: null
+  strength_model: 0.8
+  strength_clip: 0.8
+
+positive_prompt: null
+negative_prompt: "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry"
+
+overrides: {}

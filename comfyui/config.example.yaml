@@ -1,0 +1,30 @@
+# ComfyUI Runner 設定サンプル
+# 必要に応じて config.yaml にコピーして編集してください（config.yaml は .gitignore 対象）
+
+server:
+  url: "http://127.0.0.1:8188"
+  timeout: 600
+  use_websocket: true
+
+paths:
+  workflows_dir: "workflows"
+  input_dir: "input"
+  output_dir: "output"
+
+# Colab / ローカルで ComfyUI サーバーを起動する際のオプション
+colab:
+  comfyui_dir: "/content/ComfyUI"
+  drive_models_dir: "/content/drive/MyDrive/ComfyUI/models"
+  drive_output_dir: "/content/drive/MyDrive/ComfyUI/output"
+  extra_args:
+    - "--highvram"
+
+# ワークフロー実行時のデフォルト上書き設定（任意）
+defaults:
+  randomize_seed: false
+  overrides: {}
+  # 例:
+  # overrides:
+  #   "class:KSampler.steps": 28
+  #   "class:KSampler.cfg": 7.0
+  #   "title:Positive Prompt.text": "1girl, solo, masterpiece"

@@ -1,0 +1,28 @@
+# ハイブリッド運用向け モデルマニフェストサンプル
+# 必要に応じて models.yaml にコピーして編集してください（models.yaml は .gitignore 対象）
+#
+# 運用イメージ:
+# - 公開 SDXL ベースモデル / 公開 VAE 等: ここに書いて Colab 起動時に自動 DL（ローカル SSD で高速読み込み）
+# - 自作 LoRA / プライベートモデル: Google Drive の MyDrive/ComfyUI/models/loras/ に配置して extra_model_paths.yaml で参照
+# - ローカル・Drive のどちらかに既に同名ファイルがある場合は自動スキップされます
+
+models:
+  # 例 1: Hugging Face から SDXL ベースモデルを取得
+  - subdir: checkpoints
+    filename: animagine-xl-3.1.safetensors
+    hf_repo: cagliostrolab/animagine-xl-3.1
+    hf_file: animagine-xl-3.1.safetensors
+    enabled: false  # 使うモデルだけ true に変更
+
+  # 例 2: Civitai から取得（Colab Secrets に CIVITAI_API_KEY を設定すると自動でトークン付与）
+  # - subdir: checkpoints
+  #   filename: my_sdxl_model.safetensors
+  #   url: "https://civitai.com/api/download/models/000000"
+  #   enabled: false
+
+  # 例 3: SDXL 用 VAE（必要な場合）
+  # - subdir: vae
+  #   filename: sdxl_vae.safetensors
+  #   hf_repo: madebyollin/sdxl-vae-fp16-fix
+  #   hf_file: sdxl_vae.safetensors
+  #   enabled: false

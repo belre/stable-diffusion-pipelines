@@ -1,0 +1,27 @@
+# SDXL 縦長イラスト向けデフォルトプリセット（832x1216）
+# null の項目はワークフロー JSON 側の元設定をそのまま使用します。
+
+checkpoint: null   # 例: "animagine-xl-3.1.safetensors"
+vae: null          # 例: "sdxl_vae.safetensors"
+
+width: 832
+height: 1216
+batch_size: 1
+
+steps: 28
+cfg: 7.0
+sampler_name: euler_ancestral
+scheduler: normal
+denoise: 1.0
+
+# ワークフローに LoraLoader が含まれる場合のみ適用
+lora:
+  name: null       # 例: "my_character_lora.safetensors"
+  strength_model: 0.8
+  strength_clip: 0.8
+
+positive_prompt: null
+negative_prompt: "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry"
+
+# 追加で任意ノードを上書きしたい場合
+overrides: {}

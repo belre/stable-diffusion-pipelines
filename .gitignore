@@ -1,2 +1,16 @@
 .env
 local/*
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# ComfyUI runner local data & generated outputs
+comfyui/config.yaml
+comfyui/models.yaml
+comfyui/output/*
+!comfyui/output/.gitkeep
+comfyui/input/*
+!comfyui/input/.gitkeep
+comfyui/*.log
