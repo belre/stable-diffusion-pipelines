@@ -81,7 +81,10 @@ def load_workflow(path: Path | str) -> dict[str, dict[str, Any]]:
     with workflow_path.open("r", encoding="utf-8") as f:
         data = json.load(f)
 
-    return validate_api_workflow(data)
+    try:
+        return validate_api_workflow(data)
+    except WorkflowFormatError as exc:
+        raise WorkflowFormatError(f"[{workflow_path}] {exc}") from exc
 
 
 def find_nodes(
