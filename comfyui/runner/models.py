@@ -130,6 +130,7 @@ def _download_file(
         cmd = [
             "aria2c",
             "--console-log-level=warn",
+            "--allow-overwrite=true",
             "-c",
             "-x",
             "16",
@@ -145,7 +146,23 @@ def _download_file(
         for k, v in (headers or {}).items():
             cmd.extend(["--header", f"{k}: {v}"])
         cmd.append(url)
-        subprocess.run(cmd, check=True)
+        result = subprocess.run(cmd, check=False)
+        if result.returncode != 0:
+            if result.returncode == 24:
+                raise RuntimeError(
+                    f"ダウンロード認証エラー (aria2c exit 24 / HTTP 401): {dest.name}\n"
+                    "Civitai の場合は Colab Secrets に `CIVITAI_API_KEY` を登録し、"
+                    "「ノートブックからのアクセス」を ON にしてください。\n"
+                    "Hugging Face の Gated モデルの場合は `HF_TOKEN` を設定してください。"
+                )
+            if result.returncode == 22:
+                raise RuntimeError(
+                    f"ダウンロード HTTP エラー (aria2c exit 22 / HTTP 403・404 等): {dest.name}\n"
+                    "URL（モデルバージョン ID）が正しいか、または認証トークンが必要か確認してください。"
+                )
+            raise RuntimeError(
+                f"aria2c ダウンロードに失敗しました (exit code={result.returncode}): {dest.name}"
+            )
         tmp_path.replace(dest)
         return dest
 
@@ -192,8 +209,14 @@ def download_models(
         headers: dict[str, str] = {}
         if spec.is_huggingface and hf_token:
             headers["Authorization"] = f"Bearer {hf_token}"
-        elif spec.is_civitai and civitai_token:
-            url = _append_civitai_token(url, civitai_token)
+        elif spec.is_civitai:
+            if civitai_token:
+                url = _append_civitai_token(url, civitai_token)
+            elif "token=" not in url:
+                print(
+                    f"[WARN] {spec.filename}: Civitai のダウンロードには CIVITAI_API_KEY が必要な場合があります。"
+                    "Colab Secrets の登録と「ノートブックからのアクセス」ON を確認してください。"
+                )
 
         print(f"[DOWNLOAD] {spec.subdir}/{spec.filename}")
         downloaded = _download_file(url, local_dest, headers=headers, prefer_aria2=prefer_aria2)

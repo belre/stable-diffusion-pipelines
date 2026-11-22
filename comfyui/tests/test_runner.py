@@ -296,6 +296,20 @@ class TestServerAndModelHelpers(unittest.TestCase):
                 m_dl.assert_not_called()
                 self.assertEqual(paths, [existing])
 
+    def test_download_file_aria2_exit_24_raises_helpful_error(self) -> None:
+        from runner.models import _download_file
+
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = Path(tmp) / "anikawaxl_v4.safetensors"
+            fake_proc = mock.Mock(returncode=24)
+            with (
+                mock.patch("runner.models.shutil.which", return_value="/usr/bin/aria2c"),
+                mock.patch("runner.models.subprocess.run", return_value=fake_proc),
+            ):
+                with self.assertRaises(RuntimeError) as ctx:
+                    _download_file("https://civitai.com/api/download/models/2870022", dest)
+                self.assertIn("CIVITAI_API_KEY", str(ctx.exception))
+
 
 class TestClientAndCLI(unittest.TestCase):
     def test_run_workflow_with_mocked_client(self) -> None:
