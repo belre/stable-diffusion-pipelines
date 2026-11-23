@@ -133,3 +133,43 @@ class WD14Tagger:
                 self.tag_names[i]: float(probs[i]) for i in self.character_indices
             },
         }
+
+
+DEFAULT_DINOV2_REPO = "facebook/dinov2-base"
+
+
+class DINOv2Embedder:
+    """Hugging Face DINOv2 で L2 正規化済みの画像特徴ベクトル（CLS トークン）を抽出する。"""
+
+    def __init__(self, model_id: str = DEFAULT_DINOV2_REPO, device: str | None = None):
+        import torch
+        from transformers import AutoImageProcessor, AutoModel
+
+        self._torch = torch
+        self.model_id = model_id
+        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.processor = AutoImageProcessor.from_pretrained(model_id)
+        self.model = AutoModel.from_pretrained(model_id).to(self.device)
+        self.model.eval()
+        print(f"Loaded DINOv2Embedder: {model_id} on {self.device}")
+
+    def embed(self, img_bgr: np.ndarray) -> np.ndarray:
+        from PIL import Image
+
+        if img_bgr.ndim == 2:
+            img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_GRAY2RGB)
+        elif img_bgr.shape[2] == 4:
+            alpha = img_bgr[:, :, 3:4].astype(np.float32) / 255.0
+            bgr = img_bgr[:, :, :3].astype(np.float32)
+            composited = (bgr * alpha + 255.0 * (1.0 - alpha)).astype(np.uint8)
+            img_rgb = cv2.cvtColor(composited, cv2.COLOR_BGR2RGB)
+        else:
+            img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+
+        pil_img = Image.fromarray(img_rgb)
+        with self._torch.no_grad():
+            inputs = self.processor(images=pil_img, return_tensors="pt").to(self.device)
+            outputs = self.model(**inputs)
+            cls_emb = outputs.last_hidden_state[:, 0, :].float()
+            cls_emb = self._torch.nn.functional.normalize(cls_emb, p=2, dim=-1)
+        return cls_emb.squeeze(0).cpu().numpy()

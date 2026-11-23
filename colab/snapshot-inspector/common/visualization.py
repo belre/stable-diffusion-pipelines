@@ -242,3 +242,127 @@ def save_results_to_drive(output_dir: str, file_paths: list[str], prefix: str = 
         print(f"✅ 保存完了: {dst_path}")
         saved_count += 1
     print(f"合計 {saved_count} ファイルを Drive に保存しました -> {output_dir}")
+
+
+def show_leaf_summary_chart(leaf_summary_df, top_n: int = 25, figsize=(12, 7)):
+    """決定木の葉ノード別の採用数・除外数を積み上げ横棒グラフで可視化する。"""
+    sub = leaf_summary_df.head(top_n).iloc[::-1]
+    if len(sub) == 0:
+        print("ℹ️ 表示する葉ノードがありません。")
+        return
+
+    y = np.arange(len(sub))
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.barh(y, sub["selected"], color="#54A24B", alpha=0.88, label="Selected")
+    ax.barh(
+        y,
+        sub["rejected"],
+        left=sub["selected"],
+        color="#E45756",
+        alpha=0.82,
+        label="Rejected",
+    )
+    ax.set_yticks(y)
+    ax.set_yticklabels(sub.index.tolist(), fontsize=9)
+    ax.set_xlabel("Image Count")
+    ax.set_title(f"Taxonomy Leaf Distribution (Top {len(sub)} / {len(leaf_summary_df)} leaves)")
+    ax.legend(loc="lower right")
+    ax.grid(axis="x", linestyle="--", alpha=0.35)
+    plt.tight_layout()
+    plt.show()
+
+
+def show_leaf_thumbnails(
+    result_df,
+    leaf_id: str | None = None,
+    selected: bool | None = None,
+    n: int = 12,
+    cols: int = 4,
+):
+    """指定した葉ノード（または全体）の採用／除外画像サムネイルを一覧表示する。"""
+    import math
+
+    sub = result_df.copy()
+    if leaf_id is not None:
+        sub = sub[sub["leaf_id"] == leaf_id]
+    if selected is not None:
+        sub = sub[sub["selected"] == selected]
+    sub = sub.head(n)
+
+    if len(sub) == 0:
+        print(f"ℹ️ 条件に該当する画像がありません (leaf_id={leaf_id}, selected={selected})。")
+        return
+
+    rows_n = math.ceil(len(sub) / cols)
+    fig, axes = plt.subplots(rows_n, cols, figsize=(cols * 3.8, rows_n * 4.3))
+    axes = np.atleast_1d(axes).ravel()
+    title_parts = [leaf_id or "All Leaves"]
+    if selected is not None:
+        title_parts.append("Selected" if selected else "Rejected")
+    fig.suptitle(f"{' | '.join(title_parts)} (showing {len(sub)})", fontsize=12)
+
+    for ax in axes:
+        ax.axis("off")
+
+    for ax, (_, row) in zip(axes, sub.iterrows()):
+        img = cv2.imread(row["file_path"])
+        if img is not None:
+            ax.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        is_sel = bool(row.get("selected", True))
+        lines = [
+            str(row["file_name"]),
+            f"leaf={row['leaf_id']}",
+            f"sim={row['leaf_centroid_sim']:.3f} | fr={row['top_framing_score']:.2f}",
+        ]
+        if not is_sel and row.get("reject_reasons"):
+            lines.append(f"[{str(row['reject_reasons'])[:42]}]")
+        ax.set_title("\n".join(lines), fontsize=8, color="#1B5E20" if is_sel else "#B71C1C")
+        ax.axis("on")
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+    plt.tight_layout()
+    plt.show()
+
+
+def archive_folder_to_drive(
+    src_dir: str,
+    drive_output_dir: str,
+    zip_name: str,
+    local_work_dir: str = "./output",
+    compress: bool = False,
+):
+    """フォルダ全体をローカル SSD 上で ZIP 化（デフォルト ZIP_STORED）し、Google Drive へコピーする。"""
+    import zipfile
+    from pathlib import Path
+
+    if not os.path.isdir(src_dir):
+        print(f"⚠️ 警告: 対象フォルダが見つかりません: {src_dir}")
+        return None
+
+    os.makedirs(local_work_dir, exist_ok=True)
+    zip_file_name = zip_name if zip_name.endswith(".zip") else f"{zip_name}.zip"
+    local_zip = os.path.join(local_work_dir, zip_file_name)
+    mode = zipfile.ZIP_DEFLATED if compress else zipfile.ZIP_STORED
+
+    src_root = Path(src_dir).resolve()
+    file_count = 0
+    with zipfile.ZipFile(local_zip, "w", compression=mode) as zf:
+        for p in sorted(src_root.rglob("*")):
+            if p.is_file():
+                arcname = Path(src_root.name) / p.relative_to(src_root)
+                zf.write(p, arcname=str(arcname))
+                file_count += 1
+
+    size_mb = os.path.getsize(local_zip) / (1024 * 1024)
+    print(f"📦 ZIP 作成完了: {local_zip} ({file_count} files, {size_mb:.1f} MB)")
+
+    if not os.path.exists("/content/drive"):
+        print("⚠️ 警告: '/content/drive' が見つかりません。ローカル ZIP のみ作成しました。")
+        return local_zip
+
+    os.makedirs(drive_output_dir, exist_ok=True)
+    dst_zip = os.path.join(drive_output_dir, zip_file_name)
+    shutil.copy2(local_zip, dst_zip)
+    print(f"✅ Drive アップロード完了: {dst_zip}")
+    return dst_zip
