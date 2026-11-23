@@ -39,15 +39,15 @@ flowchart TD
 
 ### 向き別・分岐ルール適用 星取表
 
-| `facing_direction` | 件数 | `shoulder_tilt_deg` / `body_facing` 分離 | `top_framing_tag` 分離 (`0.35` 境界) | `full_body × camera_angle_zone` 分離 | `ambiguous` 救済 | 備考 |
-|---|---:|:---:|:---:|:---:|:---:|---|
-| **`front`** | 88 | ー（不要） | ○ | ○ | ○ | 全件 `\|shoulder_tilt_deg\| <= 90°`（前向きのみ）。`full_body` 外れ値（`0.46`, `0.61〜0.66`）は `from_above` + しゃがみ 1 件 |
-| **`three_quarter_left`** | 166 | ○ | ○ | ○ | ○ | 最多クラスタ。`full_body` 54 枚の約 6 割が `back`（見返り）。`body_x_angle` で 8 区画に排他分離 |
-| **`three_quarter_right`** | 89 | ○ | ○ | ○ | ○ | `full_body` 53 枚は `back__from_above`（18 枚）が多く、`body_x_angle` で 6 区画に排他分離 |
-| **`side_left`** | 26 | ○ | ○ | ー（不要） | ○ | `full_body` は `0.76〜0.90` で外れ値ゼロ。仰角変化ケースが出ないため過分割しない |
-| **`side_right`** | 24 | ○ | ○ | ー（不要） | ○ | `side_left` と同様に `full_body` の仰角変化なし（アニメ側面遠方の煽り生成は要注意） |
+| `facing_direction` | 件数 | `shoulder_tilt_deg` / `body_facing` 分離 | `top_framing_tag` 分離 (`0.35` 境界) | `full_body × camera_angle_zone` 分離 | `exclude_looking_back_pose`（全画角・前後判別） | `ambiguous` 救済 | 備考 |
+|---|---:|:---:|:---:|:---:|:---:|:---:|---|
+| **`front`** | 88 | ー（不要） | ○ | ○ | ○（前向き専用） | ○ | 全件 `\|shoulder_tilt_deg\| <= 90°`（前向きのみ）。`full_body` 外れ値（`0.46`, `0.61〜0.66`）は `from_above` + しゃがみ 1 件 |
+| **`three_quarter_left`** | 166 | ○ | ○ | ○ | △（暫定採用・要二次検証） | ○ | 最多クラスタ。`full_body` 54 枚の約 6 割が `back`（見返り）。`cowboy_shot` / `upper_body` でも前後判別を入れる |
+| **`three_quarter_right`** | 89 | ○ | ○ | ○ | △（暫定採用・要二次検証） | ○ | `full_body` 53 枚は `back__from_above`（18 枚）が多い。`cowboy_shot` / `upper_body` でも前後判別を入れる |
+| **`side_left`** | 26 | ○ | ○ | ー（不要） | △（暫定採用・要二次検証） | ○ | `full_body` は `0.76〜0.90` で外れ値ゼロ。仰角変化ケースが出ないため過分割しない |
+| **`side_right`** | 24 | ○ | ○ | ー（不要） | △（暫定採用・要二次検証） | ○ | `side_left` と同様に `full_body` の仰角変化なし（アニメ側面遠方の煽り生成は要注意） |
 
-> 凡例: **○** = 一次評価で実施・有効確認済み / **ー** = 構造上不要（またはデータ分布上・過分割防止のため適用外）
+> 凡例: **○** = 一次評価で実施・有効確認済み / **△** = 当面の分離精度向上のため全画角（`cowboy_shot` / `upper_body` 含む）へ暫定適用・二次評価でアルゴリズム完全検証予定 / **ー** = 構造上不要（またはデータ分布上・過分割防止のため適用外）
 
 ---
 
@@ -109,8 +109,9 @@ flowchart TD
 ## 4. `SELECTION_RULES` のベースライン方針（v1）
 
 - **共通安全ネット**: `require_pose_valid=True`, `max_person_count=1`, `min_body_mean_score=0.45`, `max_pair_sim_dedup=0.95〜0.96`, `required_tags={"1girl": 0.70}`, `forbidden_tags={"monochrome": 0.50, "multiple_girls": 0.50}`
+- **前後判別（`exclude_looking_back_pose` の暫定標準適用）**: `full_body` だけでなく **`cowboy_shot` / `upper_body` などの他画角でも**、前向きクラスタを抽出する際は `exclude_looking_back_pose=True`（または `body_facing` 分離）を条件に組み込む。アルゴリズム上の全画角網羅検証は未完了だが、当面の分離精度を引き上げるために標準条件として採用する。
 - **`front` 系**: `allowed_body_facing=["front"]`, `exclude_looking_back_pose=True`, `forbidden_tags` に `from_behind: 0.45`, `profile: 0.45`
-- **`side_*` / `three_quarter_*` 系**: `allowed_body_facing=None`, `exclude_looking_back_pose=False`, `proportion_z_max=3.0`（`front` サブフォルダのみ `from_behind: 0.45`）
+- **`side_*` / `three_quarter_*` 系**: 見返り（`back`）も含めて全件通す場合のみ `allowed_body_facing=None`, `exclude_looking_back_pose=False`, `proportion_z_max=3.0`（前向きクラスタのみ抽出する際は `exclude_looking_back_pose=True` を有効化し、`front` サブフォルダに `from_behind: 0.45` を適用）。
 - **`full_body` 純度ライン**: アイレベル立ち全身のみ抽出する場合は `full_body >= 0.55〜0.75`（向き別分布の空白地帯に合わせる）＋ `from_above: 0.35` 禁止。除外画像は `export_rejected_dataset` で理由別フォルダ＋`rejected_list.csv` に退避。
 
 ---
@@ -118,8 +119,9 @@ flowchart TD
 ## 5. 次フェーズ（二次評価・本実装）の検討事項
 
 1. **決定木のコード化（`colab/snapshot-inspector/common/`）**: 1 回の計測で全画像を決定木の葉ノードへ自動分類し、フォルダ再コピー＆再計測を不要にする。
-2. **密度（バランス）調整**: `three_quarter_left` などの過密クラスタに対し、DINOv2 類似度ベースの多様性サンプリング／上限キャップを検討。
-3. **キャラ固有プロファイル確定**: 選定済みデータセットから `maniol-elvish` の `character_profile.json` を確定し、`pose-inspection.ipynb` での本番検査へ接続。
+2. **`exclude_looking_back_pose` の全画角アルゴリズム検証**: `cowboy_shot` / `upper_body` / `ambiguous` における見返り・前後判定の誤検知／取りこぼし有無を二次評価で検証する。
+3. **密度（バランス）調整**: `three_quarter_left` などの過密クラスタに対し、DINOv2 類似度ベースの多様性サンプリング／上限キャップを検討。
+4. **キャラ固有プロファイル確定**: 選定済みデータセットから `maniol-elvish` の `character_profile.json` を確定し、`pose-inspection.ipynb` での本番検査へ接続。
 
 ---
 
