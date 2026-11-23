@@ -122,18 +122,3 @@ flowchart TD
 2. **`exclude_looking_back_pose` の全画角アルゴリズム検証**: `cowboy_shot` / `upper_body` / `ambiguous` における見返り・前後判定の誤検知／取りこぼし有無を二次評価で検証する。
 3. **密度（バランス）調整**: `three_quarter_left` などの過密クラスタに対し、DINOv2 類似度ベースの多様性サンプリング／上限キャップを検討。
 4. **キャラ固有プロファイル確定**: 選定済みデータセットから `maniol-elvish` の `character_profile.json` を確定し、`pose-inspection.ipynb` での本番検査へ接続。
-
----
-
-## 初回実行（作業コマンドメモ）
-
-```python
-copy_files_to_pattern(
-    file_list_source="./output/candidate_metrics.csv",  # 採用のみなら CURATED_CSV_PATH
-    dest_root=RECOPY_DEST_ROOT,
-    pattern_col="facing_direction",   # front / side_left / side_right / three_quarter_* へ自動振り分け
-    only_selected=False,              # 採用のみなら True
-    clear_dest=True,                  # やり直し時にコピー先の古いファイルを自動で空にする
-    dry_run=True,                     # ← 最初は True で予定だけ確認
-)
-```
