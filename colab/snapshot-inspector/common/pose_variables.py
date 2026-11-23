@@ -121,16 +121,22 @@ def extract_pose_variables(kpts, scores, img_shape, kpt_thr: float = 0.35) -> di
     def pt(name: str) -> np.ndarray:
         return body_p[KP[name]]
 
+    def in_bounds(name: str) -> bool:
+        if not has(name):
+            return False
+        x, y = float(pt(name)[0]), float(pt(name)[1])
+        return (0.0 <= x < w) and (0.0 <= y < h)
+
     valid_mask = body_s >= kpt_thr
     valid_pts = body_p[valid_mask]
 
     # --- 1. 画角・構図（framing） ---
     bbox_w_ratio = bbox_h_ratio = center_x = center_y = None
     if len(valid_pts) > 0:
-        x_min, y_min = valid_pts[:, 0].min(), valid_pts[:, 1].min()
-        x_max, y_max = valid_pts[:, 0].max(), valid_pts[:, 1].max()
-        bbox_w_ratio = (x_max - x_min) / w
-        bbox_h_ratio = (y_max - y_min) / h
+        clipped_x = np.clip(valid_pts[:, 0], 0.0, float(w))
+        clipped_y = np.clip(valid_pts[:, 1], 0.0, float(h))
+        bbox_w_ratio = (clipped_x.max() - clipped_x.min()) / w
+        bbox_h_ratio = (clipped_y.max() - clipped_y.min()) / h
 
     if has("left_shoulder", "right_shoulder", "left_hip", "right_hip"):
         core = np.mean(
@@ -163,10 +169,11 @@ def extract_pose_variables(kpts, scores, img_shape, kpt_thr: float = 0.35) -> di
     shoulder_width_ratio = (shoulder_width / w) if shoulder_width is not None else None
     eye_dist_ratio = (eye_dist / w) if eye_dist is not None else None
 
-    has_ankles = has("left_ankle") or has("right_ankle")
-    has_knees = has("left_knee") or has("right_knee")
-    has_hips = has("left_hip") or has("right_hip")
-    has_shoulders = has("left_shoulder") or has("right_shoulder")
+    # 画像枠内に実際に収まっている最下部部位からショット種別を推定（画面外予測による誤判定を防止）
+    has_ankles = in_bounds("left_ankle") or in_bounds("right_ankle")
+    has_knees = in_bounds("left_knee") or in_bounds("right_knee")
+    has_hips = in_bounds("left_hip") or in_bounds("right_hip")
+    has_shoulders = in_bounds("left_shoulder") or in_bounds("right_shoulder")
     if has_ankles:
         estimated_shot = "full_body"
     elif has_knees:
@@ -188,6 +195,43 @@ def extract_pose_variables(kpts, scores, img_shape, kpt_thr: float = 0.35) -> di
         _line_tilt_deg(pt("left_shoulder"), pt("right_shoulder"))
         if has("left_shoulder", "right_shoulder")
         else None
+    )
+
+    # 体の前後向き判定（左肩・左腰が画面右にあれば前向き、画面左に反転していれば後ろ向き）
+    side_eps = max(w * 0.02, 5.0)
+    shoulder_facing = None
+    if has("left_shoulder", "right_shoulder"):
+        dx_sh = float(pt("left_shoulder")[0] - pt("right_shoulder")[0])
+        if abs(dx_sh) < side_eps:
+            shoulder_facing = "side"
+        else:
+            shoulder_facing = "front" if dx_sh > 0 else "back"
+
+    hip_facing = None
+    if has("left_hip", "right_hip"):
+        dx_hip = float(pt("left_hip")[0] - pt("right_hip")[0])
+        if abs(dx_hip) < side_eps:
+            hip_facing = "side"
+        else:
+            hip_facing = "front" if dx_hip > 0 else "back"
+
+    if shoulder_facing and hip_facing:
+        if shoulder_facing == hip_facing:
+            body_facing = shoulder_facing
+        elif shoulder_facing == "side":
+            body_facing = hip_facing
+        elif hip_facing == "side":
+            body_facing = shoulder_facing
+        else:
+            body_facing = "twisted"
+    else:
+        body_facing = shoulder_facing or hip_facing or "unknown"
+
+    # 見返りポーズ判定（顔は前向きなのに、肩または体幹が後ろ向きに反転している状態）
+    is_looking_back_pose = bool(
+        head_roll_deg is not None
+        and abs(head_roll_deg) < 90.0
+        and (body_facing == "back" or shoulder_facing == "back")
     )
 
     head_yaw_proxy = None
@@ -317,6 +361,8 @@ def extract_pose_variables(kpts, scores, img_shape, kpt_thr: float = 0.35) -> di
         },
         "orientation": {
             "facing_direction": facing_direction,
+            "body_facing": body_facing,
+            "is_looking_back_pose": is_looking_back_pose,
             "head_yaw_proxy": round_or_none(head_yaw_proxy),
             "head_roll_deg": round_or_none(head_roll_deg, 2),
             "shoulder_tilt_deg": round_or_none(shoulder_tilt_deg, 2),

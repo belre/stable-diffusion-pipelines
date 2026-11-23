@@ -442,6 +442,8 @@ def variables_to_flat_row(record: dict, consistency: dict | None = None) -> dict
     angles = pose.get("joint_angles", {})
     dom = record["tags"].get("slot_dominant", {})
 
+    gaze_slots = record["tags"].get("slots", {}).get("gaze", {})
+
     row = {
         "image_id": record["image_id"],
         "file_name": record["file_name"],
@@ -451,6 +453,8 @@ def variables_to_flat_row(record: dict, consistency: dict | None = None) -> dict
         "shot_pose": framing.get("estimated_shot"),
         "shot_tag": dom.get("framing", {}).get("tag"),
         "facing": orient.get("facing_direction"),
+        "body_facing": orient.get("body_facing"),
+        "is_looking_back_pose": orient.get("is_looking_back_pose"),
         "head_yaw": orient.get("head_yaw_proxy"),
         "head_roll_deg": orient.get("head_roll_deg"),
         "shoulder_tilt_deg": orient.get("shoulder_tilt_deg"),
@@ -464,6 +468,8 @@ def variables_to_flat_row(record: dict, consistency: dict | None = None) -> dict
         "top_expression_score": dom.get("expression", {}).get("score"),
         "top_gaze": dom.get("gaze", {}).get("tag"),
         "top_gaze_score": dom.get("gaze", {}).get("score"),
+        "looking_back_score": gaze_slots.get("looking_back"),
+        "from_behind_score": gaze_slots.get("from_behind"),
         "top_pose_tag": dom.get("pose_action", {}).get("tag"),
         "top_pose_score": dom.get("pose_action", {}).get("score"),
     }
