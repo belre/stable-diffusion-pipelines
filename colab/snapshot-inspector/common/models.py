@@ -14,6 +14,13 @@ DEFAULT_WD14_REPO = "SmilingWolf/wd-eva02-large-tagger-v3"
 
 def get_onnx_device_config() -> tuple[str, list[str]]:
     """Return (rtmlib_device, ort_providers) based on available ONNX Runtime providers."""
+    # PyTorch 等と同梱の CUDA/cuDNN 共有ライブラリを onnxruntime-gpu へ明示的に読み込ませる
+    if hasattr(ort, "preload_dlls"):
+        try:
+            ort.preload_dlls()
+        except Exception as e:
+            print(f"ℹ️ ort.preload_dlls() skipped: {e}")
+
     available = ort.get_available_providers()
     use_cuda = "CUDAExecutionProvider" in available
     rtmlib_device = "cuda" if use_cuda else "cpu"
@@ -61,6 +68,12 @@ class WD14Tagger:
         tags_path = hf_hub_download(repo_id=repo_id, filename="selected_tags.csv")
 
         self.session = ort.InferenceSession(model_path, providers=self.providers)
+        active_providers = self.session.get_providers()
+        if "CUDAExecutionProvider" in self.providers and "CUDAExecutionProvider" not in active_providers:
+            print(
+                "⚠️ 警告: WD14Tagger が CPUExecutionProvider にフォールバックしました。"
+                "CPU版 onnxruntime の混入または CUDA/cuDNN ロード失敗の可能性があります。"
+            )
         self.input_meta = self.session.get_inputs()[0]
         self.input_name = self.input_meta.name
         self.output_name = self.session.get_outputs()[0].name
@@ -76,7 +89,7 @@ class WD14Tagger:
 
         print(
             f"Loaded WD14Tagger: {repo_id} "
-            f"(size={self.target_size}, tags={len(self.tag_names)})"
+            f"(size={self.target_size}, tags={len(self.tag_names)}, providers={active_providers})"
         )
 
     def preprocess(self, img_bgr: np.ndarray) -> np.ndarray:
