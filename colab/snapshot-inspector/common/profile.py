@@ -443,6 +443,7 @@ def variables_to_flat_row(record: dict, consistency: dict | None = None) -> dict
     dom = record["tags"].get("slot_dominant", {})
 
     gaze_slots = record["tags"].get("slots", {}).get("gaze", {})
+    cam_ang = record["tags"].get("camera_angle", {})
 
     row = {
         "image_id": record["image_id"],
@@ -452,6 +453,11 @@ def variables_to_flat_row(record: dict, consistency: dict | None = None) -> dict
         "pose_valid": pose["detection_quality"]["is_valid"],
         "shot_pose": framing.get("estimated_shot"),
         "shot_tag": dom.get("framing", {}).get("tag"),
+        "camera_angle_zone": cam_ang.get("zone"),
+        "from_above_score": cam_ang.get("from_above_score"),
+        "from_below_score": cam_ang.get("from_below_score"),
+        "camera_pitch_proxy": cam_ang.get("camera_pitch_proxy"),
+        "feet_out_of_frame_score": cam_ang.get("feet_out_of_frame_score"),
         "facing": orient.get("facing_direction"),
         "body_facing": orient.get("body_facing"),
         "is_looking_back_pose": orient.get("is_looking_back_pose"),

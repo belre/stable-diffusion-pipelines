@@ -45,9 +45,11 @@ DEFAULT_VARIABLE_TAG_SLOTS: dict[str, list[str]] = {
         "cowboy_shot",
         "full_body",
         "wide_shot",
-        "dutch_angle",
+    ],
+    "camera_angle": [
         "from_above",
         "from_below",
+        "dutch_angle",
     ],
     "pose_action": [
         "standing",
@@ -112,9 +114,11 @@ def extract_tag_variables(
     slot_definitions: dict[str, list[str]] | None = None,
     general_threshold: float = 0.35,
     character_threshold: float = 0.50,
+    slot_min_score: float = 0.35,
 ) -> dict:
     """
     WD14-Tagger の推論結果から、カテゴリ別の連続値スロット変数と高信頼度タグを抽出する。
+    スロット内の最大スコアが slot_min_score 未満の場合、slot_dominant の tag は 'ambiguous' になる。
     """
     slots_cfg = (
         slot_definitions
@@ -134,7 +138,22 @@ def extract_tag_variables(
         slots[slot_name] = slot_dict
         if slot_dict:
             top_tag, top_score = max(slot_dict.items(), key=lambda kv: kv[1])
-            slot_dominant[slot_name] = {"tag": top_tag, "score": top_score}
+            slot_dominant[slot_name] = {
+                "tag": top_tag if top_score >= slot_min_score else "ambiguous",
+                "raw_top_tag": top_tag,
+                "score": top_score,
+            }
+
+    # カメラ仰角（from_above / from_below）の専用サマリー変数
+    from_above = round(float(general_scores.get("from_above", 0.0)), 4)
+    from_below = round(float(general_scores.get("from_below", 0.0)), 4)
+    pitch_proxy = round(from_above - from_below, 4)
+    if from_above >= 0.30 and from_above >= from_below:
+        camera_angle_zone = "from_above"
+    elif from_below >= 0.30 and from_below > from_above:
+        camera_angle_zone = "from_below"
+    else:
+        camera_angle_zone = "eye_level"
 
     active_general = {
         tag: round(float(score), 4)
@@ -154,6 +173,15 @@ def extract_tag_variables(
     return {
         "slots": slots,
         "slot_dominant": slot_dominant,
+        "camera_angle": {
+            "zone": camera_angle_zone,
+            "from_above_score": from_above,
+            "from_below_score": from_below,
+            "camera_pitch_proxy": pitch_proxy,
+            "feet_out_of_frame_score": round(
+                float(general_scores.get("feet_out_of_frame", 0.0)), 4
+            ),
+        },
         "rating": {k: round(float(v), 4) for k, v in rating_scores.items()},
         "active_general_tags": active_general,
         "active_character_tags": active_character,
