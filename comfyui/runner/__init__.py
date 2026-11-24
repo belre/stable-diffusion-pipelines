@@ -12,6 +12,7 @@ from .models import (
     download_models,
     load_model_manifest,
 )
+from .prompt import GeneratedPrompt, PromptGenerator, PromptSlot
 from .server import (
     DEFAULT_MODEL_SUBDIRS,
     ComfyUIServer,
@@ -35,8 +36,11 @@ __all__ = [
     "ComfyUIError",
     "ComfyUIServer",
     "DEFAULT_MODEL_SUBDIRS",
+    "GeneratedPrompt",
     "MODEL_NODE_FIELD_MAP",
     "ModelSpec",
+    "PromptGenerator",
+    "PromptSlot",
     "RunResult",
     "WorkflowFormatError",
     "apply_overrides",

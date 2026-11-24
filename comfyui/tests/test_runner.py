@@ -17,7 +17,10 @@ if str(COMFYUI_DIR) not in sys.path:
 
 from runner import (  # noqa: E402
     ComfyUIClient,
+    GeneratedPrompt,
     ModelSpec,
+    PromptGenerator,
+    PromptSlot,
     WorkflowFormatError,
     apply_overrides,
     apply_sdxl_preset,
@@ -407,6 +410,61 @@ class TestClientAndCLI(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertEqual(m_queue.call_args.args[0]["5"]["inputs"]["width"], 832)
             self.assertTrue((out_dir / "cli_out.png").is_file())
+
+
+class TestPromptGenerator(unittest.TestCase):
+    def test_generate_with_five_slots_and_probabilities(self) -> None:
+        slots = {
+            "framing": {"enabled": True, "probability": 1.0, "choices": ["full body", "cowboy shot"]},
+            "orientation": {"enabled": True, "probability": 1.0, "choices": {"looking at viewer": 0.8, "profile": 0.2}},
+            "angle": {"enabled": True, "probability": 0.0, "choices": ["from above", "from below"]},
+            "emotion": {"enabled": False, "probability": 1.0, "choices": ["smile", "angry"]},
+            "posture": {"enabled": False, "probability": 1.0, "choices": ["standing", "sitting"], "fixed": "standing"},
+        }
+        gen = PromptGenerator(
+            common_positive="maniol-elvish, 1girl, solo",
+            common_negative="lowres, bad anatomy",
+            slots=slots,
+            seed=42,
+        )
+        result = gen.generate()
+        self.assertIsInstance(result, GeneratedPrompt)
+        self.assertEqual(result.negative, "lowres, bad anatomy")
+        self.assertIn(result.selected_slots["framing"], {"full body", "cowboy shot"})
+        self.assertIn(result.selected_slots["orientation"], {"looking at viewer", "profile"})
+        self.assertIsNone(result.selected_slots["angle"])
+        self.assertIsNone(result.selected_slots["emotion"])
+        self.assertEqual(result.selected_slots["posture"], "standing")
+        self.assertTrue(result.positive.startswith("maniol-elvish, 1girl, solo, "))
+        self.assertIn("standing", result.positive)
+
+    def test_generate_cycle_count_and_reproducibility(self) -> None:
+        slots = {
+            "framing": PromptSlot(choices=["portrait", "upper body", "full body"], probability=1.0),
+            "emotion": PromptSlot(choices=["smile", "serious", "blush"], probability=0.5),
+        }
+        gen_a = PromptGenerator("base", "neg", slots=slots, seed=123)
+        gen_b = PromptGenerator("base", "neg", slots=slots, seed=123)
+
+        cycle_a = gen_a.generate_cycle(5)
+        cycle_b = gen_b.generate_cycle(5)
+
+        self.assertEqual(len(cycle_a), 5)
+        self.assertEqual(cycle_a, cycle_b)
+
+    def test_validation_errors(self) -> None:
+        with self.assertRaises(ValueError):
+            PromptSlot(choices=["full body"], probability=1.5)
+        with self.assertRaises(ValueError):
+            PromptSlot(choices=["full body"], probability=-0.1)
+        with self.assertRaises(TypeError):
+            PromptSlot(choices="full body")  # type: ignore[arg-type]
+        with self.assertRaises(ValueError):
+            PromptSlot(choices={"full body": -1.0})
+
+        gen = PromptGenerator("base")
+        with self.assertRaises(ValueError):
+            gen.generate_cycle(0)
 
 
 if __name__ == "__main__":
