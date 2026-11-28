@@ -32,6 +32,7 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import StratifiedKFold
 from sklearn.neural_network import MLPClassifier
+from sklearn.preprocessing import LabelEncoder
 from sklearn.svm import LinearSVC
 
 EXCLUDED_SCENE_FRAMINGS: set[str] = {"broken_anatomy", "lower_body", "mid_body"}
@@ -289,6 +290,84 @@ def combine_scene_features(
     return np.hstack([dino_norm, sub_norm * float(wd14_weight)]).astype(np.float32)
 
 
+class EncodedClassifier:
+    """
+    scikit-learn 1.6+ の MLPClassifier 等で文字列ラベルが `np.isnan` TypeError を起こすのを防ぐため、
+    内部で LabelEncoder による整数ラベルへ変換して学習・推論する軽量ラッパー（joblib 保存対応）。
+    """
+
+    def __init__(self, estimator):
+        self.estimator = estimator
+        self.label_encoder = LabelEncoder()
+        self.classes_: np.ndarray | None = None
+
+    def fit(self, X: np.ndarray, y: np.ndarray):
+        y_enc = self.label_encoder.fit_transform(y)
+        self.estimator.fit(X, y_enc)
+        self.classes_ = self.label_encoder.classes_
+        return self
+
+    def predict_proba(self, X: np.ndarray) -> np.ndarray:
+        return self.estimator.predict_proba(X)
+
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        y_enc = self.estimator.predict(X)
+        return self.label_encoder.inverse_transform(y_enc)
+
+
+class SafeLinearSVC:
+    """
+    最小クラス件数が 3 未満（例: 1 枚クラスあり）の場合でも落ちない LinearSVC 確率出力ラッパー。
+    min_count >= 2 なら CalibratedClassifierCV(cv=min(3, min_count))、
+    min_count < 2 なら LinearSVC の decision_function に softmax/sigmoid を適用する。
+    """
+
+    def __init__(
+        self,
+        C: float = 1.0,
+        class_weight=None,
+        max_iter: int = 5000,
+        random_state: int = 42,
+    ):
+        self.C = C
+        self.class_weight = class_weight
+        self.max_iter = max_iter
+        self.random_state = random_state
+        self.model = None
+        self.use_calibrated = False
+        self.classes_: np.ndarray | None = None
+
+    def fit(self, X: np.ndarray, y: np.ndarray):
+        _, counts = np.unique(y, return_counts=True)
+        min_cnt = int(counts.min()) if len(counts) > 0 else 0
+        base = LinearSVC(
+            C=self.C,
+            class_weight=self.class_weight,
+            max_iter=self.max_iter,
+            random_state=self.random_state,
+        )
+        if min_cnt >= 2:
+            self.use_calibrated = True
+            self.model = CalibratedClassifierCV(base, cv=min(3, min_cnt))
+        else:
+            self.use_calibrated = False
+            self.model = base
+        self.model.fit(X, y)
+        self.classes_ = self.model.classes_
+        return self
+
+    def predict_proba(self, X: np.ndarray) -> np.ndarray:
+        if self.use_calibrated:
+            return self.model.predict_proba(X)
+        scores = self.model.decision_function(X)
+        if scores.ndim == 1:
+            p1 = 1.0 / (1.0 + np.exp(-np.clip(scores, -30.0, 30.0)))
+            return np.column_stack([1.0 - p1, p1]).astype(np.float32)
+        shifted = scores - scores.max(axis=1, keepdims=True)
+        exps = np.exp(np.clip(shifted, -30.0, 0.0))
+        return (exps / np.clip(exps.sum(axis=1, keepdims=True), 1e-8, None)).astype(np.float32)
+
+
 def _build_estimator(model_name: str, random_state: int = 42):
     if model_name == "logreg_l2":
         return LogisticRegression(
@@ -310,38 +389,34 @@ def _build_estimator(model_name: str, random_state: int = 42):
             random_state=random_state,
         )
     if model_name == "mlp":
-        return MLPClassifier(
-            hidden_layer_sizes=(256,),
-            alpha=1e-2,
-            max_iter=350,
-            early_stopping=True,
-            n_iter_no_change=15,
-            random_state=random_state,
+        return EncodedClassifier(
+            MLPClassifier(
+                hidden_layer_sizes=(256,),
+                alpha=1e-2,
+                max_iter=300,
+                early_stopping=False,
+                random_state=random_state,
+            )
         )
     if model_name == "linear_svc_cal":
-        return CalibratedClassifierCV(
-            LinearSVC(C=1.0, max_iter=5000, random_state=random_state),
-            cv=3,
-        )
+        return SafeLinearSVC(C=1.0, max_iter=5000, random_state=random_state)
     raise ValueError(f"Unknown model_name: {model_name}")
 
 
 def _build_binary_estimator(model_name: str, random_state: int = 42):
     if model_name == "mlp":
-        return MLPClassifier(
-            hidden_layer_sizes=(128,),
-            alpha=1e-2,
-            max_iter=300,
-            early_stopping=True,
-            n_iter_no_change=15,
-            random_state=random_state,
+        return EncodedClassifier(
+            MLPClassifier(
+                hidden_layer_sizes=(128,),
+                alpha=1e-2,
+                max_iter=300,
+                early_stopping=False,
+                random_state=random_state,
+            )
         )
     if model_name == "linear_svc_cal":
-        return CalibratedClassifierCV(
-            LinearSVC(
-                C=1.0, class_weight="balanced", max_iter=5000, random_state=random_state
-            ),
-            cv=3,
+        return SafeLinearSVC(
+            C=1.0, class_weight="balanced", max_iter=5000, random_state=random_state
         )
     return LogisticRegression(
         C=3.0,
