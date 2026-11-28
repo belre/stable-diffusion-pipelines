@@ -163,11 +163,13 @@ def extract_or_load_scene_features(
             meta = json.load(f)
         cached_md5s = meta.get("md5_list", [])
         cached_tag_names = list(meta.get("wd14_tag_names", []))
-        data = np.load(cache_npz, allow_pickle=False)
+        with np.load(cache_npz, allow_pickle=False) as data:
+            dino_arr = data["dino_embs"]
+            wd14_arr = data["wd14_probs"] if "wd14_probs" in data else None
         for i, m in enumerate(cached_md5s):
-            existing_dino[m] = data["dino_embs"][i]
-            if "wd14_probs" in data:
-                existing_wd14[m] = data["wd14_probs"][i]
+            existing_dino[m] = dino_arr[i]
+            if wd14_arr is not None:
+                existing_wd14[m] = wd14_arr[i]
 
     wd14_tag_names: list[str] = (
         [tagger.tag_names[i] for i in tagger.general_indices] if want_wd14 else []
@@ -1427,10 +1429,11 @@ def extract_or_load_scene_feature_pack(
         with open(v1_meta, "r", encoding="utf-8") as f:
             m1 = json.load(f)
         if m1.get("has_wd14") and list(m1.get("wd14_tag_names", [])) == wd14_tag_names:
-            d1 = np.load(v1_npz, allow_pickle=False)
-            if "wd14_probs" in d1:
+            with np.load(v1_npz, allow_pickle=False) as d1:
+                w1_arr = d1["wd14_probs"] if "wd14_probs" in d1 else None
+            if w1_arr is not None:
                 for i, m in enumerate(m1.get("md5_list", [])):
-                    v1_wd14_by_md5[m] = d1["wd14_probs"][i]
+                    v1_wd14_by_md5[m] = w1_arr[i]
                 print(
                     f"ℹ️ 既存 v1 キャッシュから WD14 スコアを自動流用します ({len(v1_wd14_by_md5)} 件利用可能)"
                 )
