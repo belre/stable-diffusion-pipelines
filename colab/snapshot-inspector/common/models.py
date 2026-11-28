@@ -167,7 +167,7 @@ class DINOv2Embedder:
         self.model.eval()
         print(f"Loaded DINOv2Embedder: {model_id} on {self.device}")
 
-    def embed(self, img_bgr: np.ndarray) -> np.ndarray:
+    def _to_pil(self, img_bgr: np.ndarray):
         from PIL import Image
 
         if img_bgr.ndim == 2:
@@ -179,11 +179,55 @@ class DINOv2Embedder:
             img_rgb = cv2.cvtColor(composited, cv2.COLOR_BGR2RGB)
         else:
             img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+        return Image.fromarray(img_rgb)
 
-        pil_img = Image.fromarray(img_rgb)
+    def embed(self, img_bgr: np.ndarray) -> np.ndarray:
+        pil_img = self._to_pil(img_bgr)
         with self._torch.no_grad():
             inputs = self.processor(images=pil_img, return_tensors="pt").to(self.device)
             outputs = self.model(**inputs)
             cls_emb = outputs.last_hidden_state[:, 0, :].float()
             cls_emb = self._torch.nn.functional.normalize(cls_emb, p=2, dim=-1)
         return cls_emb.squeeze(0).cpu().numpy()
+
+    def embed_spatial(self, img_bgr: np.ndarray) -> dict[str, np.ndarray]:
+        """
+        1 回の forward パスで以下の 3 本の L2 正規化済み特徴ベクトルを抽出する:
+        - `cls`: CLS トークン (D,)
+        - `lr_diff`: 左半分パッチ平均 - 右半分パッチ平均 (D,)  ※左右向きの識別に有効
+        - `tb_diff`: 上半分パッチ平均 - 下半分パッチ平均 (D,)  ※仰角・画角の識別に有効
+        """
+        pil_img = self._to_pil(img_bgr)
+        with self._torch.no_grad():
+            inputs = self.processor(images=pil_img, return_tensors="pt").to(self.device)
+            outputs = self.model(**inputs)
+            hs = outputs.last_hidden_state[0].float()  # (1 + R + P, D)
+
+            cls_vec = self._torch.nn.functional.normalize(hs[0], p=2, dim=-1)
+
+            n_reg = int(getattr(self.model.config, "num_register_tokens", 0) or 0)
+            patches = hs[1 + n_reg :]  # (P, D)
+            n_patches = patches.shape[0]
+            side = int(round(n_patches ** 0.5))
+            if side * side == n_patches and side >= 2:
+                grid = patches.view(side, side, -1)
+                mid = side // 2
+                left_mean = grid[:, :mid, :].mean(dim=(0, 1))
+                right_mean = grid[:, side - mid :, :].mean(dim=(0, 1))
+                top_mean = grid[:mid, :, :].mean(dim=(0, 1))
+                bottom_mean = grid[side - mid :, :, :].mean(dim=(0, 1))
+                lr_diff = self._torch.nn.functional.normalize(
+                    left_mean - right_mean, p=2, dim=-1
+                )
+                tb_diff = self._torch.nn.functional.normalize(
+                    top_mean - bottom_mean, p=2, dim=-1
+                )
+            else:
+                lr_diff = self._torch.zeros_like(cls_vec)
+                tb_diff = self._torch.zeros_like(cls_vec)
+
+        return {
+            "cls": cls_vec.cpu().numpy().astype(np.float32),
+            "lr_diff": lr_diff.cpu().numpy().astype(np.float32),
+            "tb_diff": tb_diff.cpu().numpy().astype(np.float32),
+        }
