@@ -7,7 +7,6 @@ import numpy as np
 import onnxruntime as ort
 import pandas as pd
 from huggingface_hub import hf_hub_download
-from rtmlib import Wholebody
 
 DEFAULT_WD14_REPO = "SmilingWolf/wd-eva02-large-tagger-v3"
 
@@ -36,8 +35,10 @@ def init_wholebody(
     mode: str = "performance",
     to_openpose: bool = False,
     device: str | None = None,
-) -> Wholebody:
+):
     """Initialize rtmlib Wholebody (COCO WholeBody 133 keypoints) model."""
+    from rtmlib import Wholebody
+
     if device is None:
         device, _ = get_onnx_device_config()
     return Wholebody(
