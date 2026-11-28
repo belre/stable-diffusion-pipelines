@@ -10,6 +10,7 @@ import json
 import math
 import os
 import shutil
+import time
 import warnings
 from datetime import datetime, timezone
 from pathlib import Path
@@ -391,9 +392,12 @@ def _build_estimator(model_name: str, random_state: int = 42):
     if model_name == "mlp":
         return EncodedClassifier(
             MLPClassifier(
-                hidden_layer_sizes=(256,),
+                hidden_layer_sizes=(128,),
                 alpha=1e-2,
-                max_iter=300,
+                batch_size=128,
+                max_iter=100,
+                tol=1e-3,
+                n_iter_no_change=5,
                 early_stopping=False,
                 random_state=random_state,
             )
@@ -407,9 +411,12 @@ def _build_binary_estimator(model_name: str, random_state: int = 42):
     if model_name == "mlp":
         return EncodedClassifier(
             MLPClassifier(
-                hidden_layer_sizes=(128,),
+                hidden_layer_sizes=(64,),
                 alpha=1e-2,
-                max_iter=300,
+                batch_size=128,
+                max_iter=100,
+                tol=1e-3,
+                n_iter_no_change=5,
                 early_stopping=False,
                 random_state=random_state,
             )
@@ -453,7 +460,7 @@ def evaluate_scene_classifiers(
     if feature_modes is None:
         feature_modes = ["dino_only", "dino_wd14"] if wd14_probs is not None else ["dino_only"]
     if model_names is None:
-        model_names = ["logreg_l2", "logreg_balanced", "logreg_strong", "mlp"]
+        model_names = ["logreg_l2", "logreg_balanced", "logreg_strong", "linear_svc_cal"]
 
     y_base = train_df["base_scene"].astype(str).to_numpy()
     y_sit = train_df["is_sitting"].astype(int).to_numpy()
@@ -477,11 +484,56 @@ def evaluate_scene_classifiers(
     best_score = -1.0
     best_oof: dict = {}
 
+    def _build_fold_matrices(fold_pairs, fmode: str, is_base: bool):
+        mats = []
+        for a, b in fold_pairs:
+            if is_base:
+                tr_idx = np.concatenate([eval_indices[a], rare_indices])
+                va_idx = eval_indices[b]
+                va_target = b
+            else:
+                tr_idx, va_idx = a, b
+                va_target = b
+
+            if fmode == "dino_wd14" and wd14_probs is not None:
+                sel_idx, _ = select_wd14_active_tags(
+                    wd14_probs[tr_idx],
+                    wd14_tag_names,
+                    min_max_score=wd14_min_max_score,
+                    max_tags=wd14_max_tags,
+                )
+            else:
+                sel_idx = None
+
+            X_tr = combine_scene_features(
+                dino_embs[tr_idx],
+                wd14_probs[tr_idx] if wd14_probs is not None else None,
+                selected_wd14_indices=sel_idx,
+                feature_mode=fmode,
+                wd14_weight=wd14_weight,
+            )
+            X_va = combine_scene_features(
+                dino_embs[va_idx],
+                wd14_probs[va_idx] if wd14_probs is not None else None,
+                selected_wd14_indices=sel_idx,
+                feature_mode=fmode,
+                wd14_weight=wd14_weight,
+            )
+            mats.append((tr_idx, va_target, X_tr, X_va))
+        return mats
+
     for fmode in feature_modes:
         if fmode == "dino_wd14" and wd14_probs is None:
             continue
 
+        # 特徴量行列を fold ごとに事前計算（モデル間で再利用）
+        base_fold_mats = _build_fold_matrices(folds, fmode, is_base=True)
+        sit_fold_mats = _build_fold_matrices(folds_sit, fmode, is_base=False)
+        twi_fold_mats = _build_fold_matrices(folds_twi, fmode, is_base=False)
+        binary_cache: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+
         for mname in model_names:
+            t0 = time.perf_counter()
             oof_pred = np.empty(len(eval_indices), dtype=object)
             oof_top1_prob = np.zeros(len(eval_indices), dtype=np.float32)
             oof_top2_label = np.empty(len(eval_indices), dtype=object)
@@ -492,35 +544,7 @@ def evaluate_scene_classifiers(
 
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                for tr_rel, va_rel in folds:
-                    tr_idx = np.concatenate([eval_indices[tr_rel], rare_indices])
-                    va_idx = eval_indices[va_rel]
-
-                    if fmode == "dino_wd14" and wd14_probs is not None:
-                        sel_idx, _ = select_wd14_active_tags(
-                            wd14_probs[tr_idx],
-                            wd14_tag_names,
-                            min_max_score=wd14_min_max_score,
-                            max_tags=wd14_max_tags,
-                        )
-                    else:
-                        sel_idx = None
-
-                    X_tr = combine_scene_features(
-                        dino_embs[tr_idx],
-                        wd14_probs[tr_idx] if wd14_probs is not None else None,
-                        selected_wd14_indices=sel_idx,
-                        feature_mode=fmode,
-                        wd14_weight=wd14_weight,
-                    )
-                    X_va = combine_scene_features(
-                        dino_embs[va_idx],
-                        wd14_probs[va_idx] if wd14_probs is not None else None,
-                        selected_wd14_indices=sel_idx,
-                        feature_mode=fmode,
-                        wd14_weight=wd14_weight,
-                    )
-
+                for tr_idx, va_rel, X_tr, X_va in base_fold_mats:
                     clf = _build_estimator(mname, random_state=random_state)
                     clf.fit(X_tr, y_base[tr_idx])
                     probs = clf.predict_proba(X_va)
@@ -539,67 +563,25 @@ def evaluate_scene_classifiers(
                         if c_name in class_to_col:
                             oof_prob_mat[va_rel, class_to_col[c_name]] = probs[:, c_pos]
 
-                # sitting / twisted の OOF 評価
-                oof_sit_prob = np.zeros(len(y_sit), dtype=np.float32)
-                for tr_idx, va_idx in folds_sit:
-                    sel_idx = (
-                        select_wd14_active_tags(
-                            wd14_probs[tr_idx],
-                            wd14_tag_names,
-                            min_max_score=wd14_min_max_score,
-                            max_tags=wd14_max_tags,
-                        )[0]
-                        if (fmode == "dino_wd14" and wd14_probs is not None)
-                        else None
-                    )
-                    X_tr = combine_scene_features(
-                        dino_embs[tr_idx],
-                        wd14_probs[tr_idx] if wd14_probs is not None else None,
-                        selected_wd14_indices=sel_idx,
-                        feature_mode=fmode,
-                        wd14_weight=wd14_weight,
-                    )
-                    X_va = combine_scene_features(
-                        dino_embs[va_idx],
-                        wd14_probs[va_idx] if wd14_probs is not None else None,
-                        selected_wd14_indices=sel_idx,
-                        feature_mode=fmode,
-                        wd14_weight=wd14_weight,
-                    )
-                    clf_sit = _build_binary_estimator(mname, random_state=random_state)
-                    clf_sit.fit(X_tr, y_sit[tr_idx])
-                    oof_sit_prob[va_idx] = clf_sit.predict_proba(X_va)[:, 1]
+                # sitting / twisted の OOF 評価（同一2値推定器はキャッシュ再利用）
+                bin_key = mname if mname in ("mlp", "linear_svc_cal") else "logreg"
+                if bin_key in binary_cache:
+                    oof_sit_prob, oof_twi_prob = binary_cache[bin_key]
+                else:
+                    oof_sit_prob = np.zeros(len(y_sit), dtype=np.float32)
+                    for tr_idx, va_idx, X_tr, X_va in sit_fold_mats:
+                        clf_sit = _build_binary_estimator(mname, random_state=random_state)
+                        clf_sit.fit(X_tr, y_sit[tr_idx])
+                        oof_sit_prob[va_idx] = clf_sit.predict_proba(X_va)[:, 1]
 
-                oof_twi_prob = np.zeros(len(y_twi), dtype=np.float32)
-                for tr_idx, va_idx in folds_twi:
-                    sel_idx = (
-                        select_wd14_active_tags(
-                            wd14_probs[tr_idx],
-                            wd14_tag_names,
-                            min_max_score=wd14_min_max_score,
-                            max_tags=wd14_max_tags,
-                        )[0]
-                        if (fmode == "dino_wd14" and wd14_probs is not None)
-                        else None
-                    )
-                    X_tr = combine_scene_features(
-                        dino_embs[tr_idx],
-                        wd14_probs[tr_idx] if wd14_probs is not None else None,
-                        selected_wd14_indices=sel_idx,
-                        feature_mode=fmode,
-                        wd14_weight=wd14_weight,
-                    )
-                    X_va = combine_scene_features(
-                        dino_embs[va_idx],
-                        wd14_probs[va_idx] if wd14_probs is not None else None,
-                        selected_wd14_indices=sel_idx,
-                        feature_mode=fmode,
-                        wd14_weight=wd14_weight,
-                    )
-                    clf_twi = _build_binary_estimator(mname, random_state=random_state)
-                    clf_twi.fit(X_tr, y_twi[tr_idx])
-                    oof_twi_prob[va_idx] = clf_twi.predict_proba(X_va)[:, 1]
+                    oof_twi_prob = np.zeros(len(y_twi), dtype=np.float32)
+                    for tr_idx, va_idx, X_tr, X_va in twi_fold_mats:
+                        clf_twi = _build_binary_estimator(mname, random_state=random_state)
+                        clf_twi.fit(X_tr, y_twi[tr_idx])
+                        oof_twi_prob[va_idx] = clf_twi.predict_proba(X_va)[:, 1]
+                    binary_cache[bin_key] = (oof_sit_prob, oof_twi_prob)
 
+            elapsed = time.perf_counter() - t0
             y_true_eval = y_base[eval_indices]
             acc = float(accuracy_score(y_true_eval, oof_pred))
             macro_f1 = float(
@@ -637,13 +619,14 @@ def evaluate_scene_classifiers(
                 "sitting_ap": round(sit_ap, 4),
                 "twisted_f1": round(twi_f1, 4),
                 "twisted_ap": round(twi_ap, 4),
+                "elapsed_sec": round(elapsed, 1),
                 "eval_samples": int(len(eval_indices)),
                 "eval_classes": int(len(eval_classes)),
                 "rare_train_only_classes": int(len(counts) - len(eval_classes)),
             }
             rows.append(row)
             print(
-                f"[{fmode:9s} | {mname:15s}] "
+                f"[{fmode:9s} | {mname:15s}] ({elapsed:5.1f}s) "
                 f"acc={acc:.4f}, macro_f1={macro_f1:.4f}, top3={top3:.4f} | "
                 f"sit_f1={sit_f1:.4f} (AP={sit_ap:.4f}), twi_f1={twi_f1:.4f} (AP={twi_ap:.4f})"
             )
